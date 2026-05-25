@@ -3,157 +3,164 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Anitabi 巡礼路线 Demo</title>
+    <title>Anitabi Trip Planner Demo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <section class="workspace">
-        <aside class="panel" aria-label="路线规划控制面板">
+        <aside class="panel" aria-label="路线规划控制面板" data-i18n-attr="aria-label:panelLabel">
           <div class="brand">
             <span class="brand-mark">巡</span>
             <div>
-              <h1>Anitabi 巡礼路线</h1>
-              <p>基于公开 API 的非商业路线规划原型</p>
+              <h1 data-i18n="appTitle">Anitabi 巡礼路线</h1>
+              <p data-i18n="appSubtitle">基于公开 API 的非商业路线规划原型</p>
             </div>
           </div>
+          <label class="language-select">
+            <span data-i18n="language">语言</span>
+            <select id="languageSelect">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
 
-          <div class="notice">
+          <div class="notice" data-i18n="notice">
             数据来自 Anitabi 开放 API，遵循 CC BY-NC-SA 4.0。位置只在当前浏览器中计算。
           </div>
 
           <fieldset class="control-group">
-            <legend>当前位置</legend>
+            <legend data-i18n="currentLocation">当前位置</legend>
             <div class="search-box">
               <label>
-                地点搜索
-                <input id="locationSearchInput" type="search" placeholder="输入城市、车站或景点，如 京都站" />
+                <span data-i18n="locationSearch">地点搜索</span>
+                <input id="locationSearchInput" type="search" placeholder="输入城市、车站或景点，如 京都站" data-i18n-attr="placeholder:locationPlaceholder" />
               </label>
-              <button id="locationSearchBtn" type="button" class="secondary">搜索</button>
+              <button id="locationSearchBtn" type="button" class="secondary" data-i18n="search">搜索</button>
             </div>
             <div id="locationSearchResults" class="location-results"></div>
             <div class="grid-2">
               <label>
-                纬度
+                <span data-i18n="latitude">纬度</span>
                 <input id="latInput" type="number" step="0.000001" value="34.8909" />
               </label>
               <label>
-                经度
+                <span data-i18n="longitude">经度</span>
                 <input id="lngInput" type="number" step="0.000001" value="135.8074" />
               </label>
             </div>
-            <p class="hint">也可以直接点击地图选择出发点。</p>
+            <p class="hint" data-i18n="mapClickHint">也可以直接点击地图选择出发点。</p>
           </fieldset>
 
           <fieldset class="control-group">
-            <legend>作品集合</legend>
+            <legend data-i18n="subjectSet">作品集合</legend>
             <div class="search-box subject-search">
               <label>
-                Bangumi 动画搜索
-                <input id="bangumiSearchInput" type="search" placeholder="输入作品名，如 吹响吧 上低音号" />
+                <span data-i18n="bangumiSearch">Bangumi 动画搜索</span>
+                <input id="bangumiSearchInput" type="search" placeholder="输入作品名，如 吹响吧 上低音号" data-i18n-attr="placeholder:bangumiPlaceholder" />
               </label>
-              <button id="bangumiSearchBtn" type="button" class="secondary">搜索</button>
+              <button id="bangumiSearchBtn" type="button" class="secondary" data-i18n="search">搜索</button>
             </div>
             <div class="subject-picker">
               <div class="subject-column">
                 <div class="section-header">
-                  <span class="section-label">搜索结果</span>
-                  <button id="selectAllSubjectsBtn" class="secondary micro-button" type="button">一键全选</button>
+                  <span class="section-label" data-i18n="searchResults">搜索结果</span>
+                  <button id="selectAllSubjectsBtn" class="secondary micro-button" type="button" data-i18n="selectAll">一键全选</button>
                 </div>
                 <div id="bangumiSearchResults" class="subject-results"></div>
               </div>
               <div class="subject-column selected-column">
                 <div class="section-header">
-                  <span class="section-label">已选作品</span>
+                  <span class="section-label" data-i18n="selectedSubjects">已选作品</span>
                   <span class="button-pair">
-                    <button id="removeMissingSubjectsBtn" class="secondary micro-button" type="button">移除未收录</button>
-                    <button id="clearSubjectsBtn" class="secondary micro-button" type="button">一键移除</button>
+                    <button id="removeMissingSubjectsBtn" class="secondary micro-button" type="button" data-i18n="removeMissing">移除未收录</button>
+                    <button id="clearSubjectsBtn" class="secondary micro-button" type="button" data-i18n="clearAll">一键移除</button>
                   </span>
                 </div>
                 <div id="selectedSubjects" class="selected-subjects"></div>
               </div>
             </div>
             <label>
-              Bangumi subject ID，用逗号分隔
-              <input id="subjectInput" placeholder="例如 115908, 2581" />
+              <span data-i18n="subjectIds">Bangumi subject ID，用逗号分隔</span>
+              <input id="subjectInput" placeholder="例如 115908, 2581" data-i18n-attr="placeholder:subjectPlaceholder" />
             </label>
-            <p class="hint">搜索使用 Bangumi 公开 API；手动 ID 输入仍保留，便于导入榜单或外部映射结果。</p>
+            <p class="hint" data-i18n="subjectHint">搜索使用 Bangumi 公开 API；手动 ID 输入仍保留，便于导入榜单或外部映射结果。</p>
           </fieldset>
 
           <fieldset class="control-group">
-            <legend>旅行参数</legend>
+            <legend data-i18n="tripParams">旅行参数</legend>
             <div class="grid-2">
               <label>
-                天数
+                <span data-i18n="days">天数</span>
                 <input id="daysInput" type="number" min="1" max="7" value="1" />
               </label>
               <label>
-                每天最多地点
+                <span data-i18n="stopsPerDay">每天最多地点</span>
                 <input id="stopsInput" type="number" min="2" max="12" value="6" />
               </label>
             </div>
             <label>
-              搜索半径
+              <span data-i18n="radius">搜索半径</span>
               <select id="radiusSelect">
                 <option value="5">5 km</option>
                 <option value="15" selected>15 km</option>
                 <option value="50">50 km</option>
                 <option value="200">200 km</option>
-                <option value="99999">不限</option>
+                <option value="99999" data-i18n="unlimited">不限</option>
               </select>
             </label>
             <div class="grid-2">
               <label>
-                每日开始
+                <span data-i18n="dayStart">每日开始</span>
                 <input id="dayStartInput" type="time" value="10:00" />
               </label>
               <label>
-                每日结束
+                <span data-i18n="dayEnd">每日结束</span>
                 <input id="dayEndInput" type="time" value="18:00" />
               </label>
             </div>
             <label>
-              路线强度
+              <span data-i18n="intensity">路线强度</span>
               <select id="intensitySelect">
-                <option value="relaxed">轻松</option>
-                <option value="standard" selected>标准</option>
-                <option value="hardcore">硬核</option>
+                <option value="relaxed" data-i18n="relaxed">轻松</option>
+                <option value="standard" selected data-i18n="standard">标准</option>
+                <option value="hardcore" data-i18n="hardcore">硬核</option>
               </select>
             </label>
             <label>
-              路线模式
+              <span data-i18n="routeMode">路线模式</span>
               <select id="routeModeSelect">
-                <option value="normal" selected>完整路线</option>
-                <option value="dense">只看高密度区域</option>
-                <option value="loop">环路路线</option>
+                <option value="normal" selected data-i18n="normalRoute">完整路线</option>
+                <option value="dense" data-i18n="denseRoute">只看高密度区域</option>
+                <option value="loop" data-i18n="loopRoute">环路路线</option>
               </select>
             </label>
           </fieldset>
 
           <div class="row actions">
-            <button id="planBtn" type="button">生成路线</button>
-            <button id="nearbyBtn" type="button" class="secondary">只看附近</button>
-            <button id="exportKmlBtn" type="button" class="secondary">导出 KML</button>
-            <button id="shareBtn" type="button" class="secondary">分享链接</button>
+            <button id="planBtn" type="button" data-i18n="planRoute">生成路线</button>
+            <button id="nearbyBtn" type="button" class="secondary" data-i18n="nearbyOnly">只看附近</button>
+            <button id="exportKmlBtn" type="button" class="secondary" data-i18n="exportKml">导出 KML</button>
+            <button id="shareBtn" type="button" class="secondary" data-i18n="shareLink">分享链接</button>
           </div>
 
-          <div id="status" class="status" role="status">准备就绪</div>
+          <div id="status" class="status" role="status" data-i18n="ready">准备就绪</div>
         </aside>
 
-        <section class="map-zone" aria-label="地图与结果">
+        <section class="map-zone" aria-label="地图与结果" data-i18n-attr="aria-label:mapResults">
           <div class="map-wrap">
             <div id="map"></div>
-            <div class="map-toolbar" aria-label="地图工具栏">
-              <button id="mapLocateBtn" type="button" title="定位当前位置" aria-label="定位当前位置">⌖</button>
-              <button id="mapZoomInBtn" type="button" title="放大" aria-label="放大">+</button>
-              <button id="mapZoomOutBtn" type="button" title="缩小" aria-label="缩小">−</button>
+            <div class="map-toolbar" aria-label="地图工具栏" data-i18n-attr="aria-label:mapToolbar">
+              <button id="mapLocateBtn" type="button" title="定位当前位置" aria-label="定位当前位置" data-i18n-attr="title:locateCurrent;aria-label:locateCurrent">⌖</button>
+              <button id="mapZoomInBtn" type="button" title="放大" aria-label="放大" data-i18n-attr="title:zoomIn;aria-label:zoomIn">+</button>
+              <button id="mapZoomOutBtn" type="button" title="缩小" aria-label="缩小" data-i18n-attr="title:zoomOut;aria-label:zoomOut">−</button>
             </div>
           </div>
           <div class="results" aria-live="polite">
             <div class="tabs" role="tablist">
-              <button id="routeTab" class="tab active" type="button">路线</button>
-              <button id="nearbyTab" class="tab" type="button">附近圣地</button>
+              <button id="routeTab" class="tab active" type="button" data-i18n="route">路线</button>
+              <button id="nearbyTab" class="tab" type="button" data-i18n="nearbySpots">附近圣地</button>
             </div>
             <div id="routePanel" class="result-panel"></div>
             <div id="nearbyPanel" class="result-panel hidden"></div>

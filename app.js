@@ -17,9 +17,178 @@ const state = {
   expandedClusters: new Map(),
   routeClusters: [],
   routeDays: [],
+  language: "zh",
 };
 
 const $ = (id) => document.getElementById(id);
+
+const I18N = {
+  zh: {
+    panelLabel: "路线规划控制面板",
+    appTitle: "Anitabi 巡礼路线",
+    appSubtitle: "基于公开 API 的非商业路线规划原型",
+    language: "语言",
+    notice: "数据来自 Anitabi 开放 API，遵循 CC BY-NC-SA 4.0。位置只在当前浏览器中计算。",
+    currentLocation: "当前位置",
+    locationSearch: "地点搜索",
+    locationPlaceholder: "输入城市、车站或景点，如 京都站",
+    search: "搜索",
+    latitude: "纬度",
+    longitude: "经度",
+    mapClickHint: "也可以直接点击地图选择出发点。",
+    subjectSet: "作品集合",
+    bangumiSearch: "Bangumi 动画搜索",
+    bangumiPlaceholder: "输入作品名，如 吹响吧 上低音号",
+    searchResults: "搜索结果",
+    selectAll: "一键全选",
+    selectedSubjects: "已选作品",
+    removeMissing: "移除未收录",
+    clearAll: "一键移除",
+    subjectIds: "Bangumi subject ID，用逗号分隔",
+    subjectPlaceholder: "例如 115908, 2581",
+    subjectHint: "搜索使用 Bangumi 公开 API；手动 ID 输入仍保留，便于导入榜单或外部映射结果。",
+    tripParams: "旅行参数",
+    days: "天数",
+    stopsPerDay: "每天最多地点",
+    radius: "搜索半径",
+    unlimited: "不限",
+    dayStart: "每日开始",
+    dayEnd: "每日结束",
+    intensity: "路线强度",
+    relaxed: "轻松",
+    standard: "标准",
+    hardcore: "硬核",
+    routeMode: "路线模式",
+    normalRoute: "完整路线",
+    denseRoute: "只看高密度区域",
+    loopRoute: "环路路线",
+    planRoute: "生成路线",
+    nearbyOnly: "只看附近",
+    exportKml: "导出 KML",
+    shareLink: "分享链接",
+    ready: "准备就绪",
+    mapResults: "地图与结果",
+    mapToolbar: "地图工具栏",
+    locateCurrent: "定位当前位置",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+    route: "路线",
+    nearbySpots: "附近圣地",
+    chooseAndPlan: "请选择作品集合并生成路线。",
+    chooseAndNearby: "请选择作品集合，然后查看附近圣地。",
+    noSelectedSubjects: "尚未选择作品。可以搜索 Bangumi 条目或手动输入 ID。",
+    searchPrompt: "搜索作品后会显示候选条目。",
+    allSearchSelected: "搜索结果都已加入作品集合。",
+    manualInput: "手动输入",
+    noNewSearchResults: "当前搜索结果没有可新增作品。",
+    addedSearchResults: "已加入 {count} 个搜索结果。",
+    noSelectedStatus: "当前没有已选作品。",
+    clearedSubjects: "已清空已选作品。",
+    noMissingSubjects: "当前没有已确认未收录的作品。",
+    removedMissingSubjects: "已移除 {count} 个 Anitabi 未收录作品。",
+    remove: "移除",
+    add: "加入",
+    notCollected: "未收录",
+    checkingAnitabi: "正在检查 Anitabi",
+    anitabiSpots: "Anitabi {count} 个巡礼点",
+  },
+  en: {
+    panelLabel: "Route planning controls",
+    appTitle: "Anitabi Pilgrimage Routes",
+    appSubtitle: "A non-commercial route planning prototype based on public APIs",
+    language: "Language",
+    notice: "Data comes from the Anitabi public API under CC BY-NC-SA 4.0. Your location is processed only in this browser.",
+    currentLocation: "Current Location",
+    locationSearch: "Location Search",
+    locationPlaceholder: "Enter a city, station, or landmark, e.g. Kyoto Station",
+    search: "Search",
+    latitude: "Latitude",
+    longitude: "Longitude",
+    mapClickHint: "You can also click the map to choose the starting point.",
+    subjectSet: "Anime Set",
+    bangumiSearch: "Bangumi Anime Search",
+    bangumiPlaceholder: "Enter an anime title, e.g. Sound! Euphonium",
+    searchResults: "Search Results",
+    selectAll: "Select All",
+    selectedSubjects: "Selected Anime",
+    removeMissing: "Remove Missing",
+    clearAll: "Clear All",
+    subjectIds: "Bangumi subject IDs, separated by commas",
+    subjectPlaceholder: "e.g. 115908, 2581",
+    subjectHint: "Search uses the Bangumi public API. Manual ID input is kept for imports and external mappings.",
+    tripParams: "Trip Settings",
+    days: "Days",
+    stopsPerDay: "Max Stops / Day",
+    radius: "Search Radius",
+    unlimited: "Unlimited",
+    dayStart: "Day Start",
+    dayEnd: "Day End",
+    intensity: "Route Intensity",
+    relaxed: "Relaxed",
+    standard: "Standard",
+    hardcore: "Hardcore",
+    routeMode: "Route Mode",
+    normalRoute: "Full Route",
+    denseRoute: "Dense Areas Only",
+    loopRoute: "Loop Route",
+    planRoute: "Plan Route",
+    nearbyOnly: "Nearby Only",
+    exportKml: "Export KML",
+    shareLink: "Share Link",
+    ready: "Ready",
+    mapResults: "Map and results",
+    mapToolbar: "Map toolbar",
+    locateCurrent: "Locate current position",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    route: "Route",
+    nearbySpots: "Nearby Spots",
+    chooseAndPlan: "Select anime and plan a route.",
+    chooseAndNearby: "Select anime, then view nearby spots.",
+    noSelectedSubjects: "No anime selected. Search Bangumi or enter IDs manually.",
+    searchPrompt: "Search results will appear here.",
+    allSearchSelected: "All search results have been selected.",
+    manualInput: "Manual input",
+    noNewSearchResults: "No new anime can be added from the current search results.",
+    addedSearchResults: "Added {count} search results.",
+    noSelectedStatus: "No anime selected.",
+    clearedSubjects: "Cleared selected anime.",
+    noMissingSubjects: "No confirmed missing anime to remove.",
+    removedMissingSubjects: "Removed {count} anime not collected by Anitabi.",
+    remove: "Remove",
+    add: "Add",
+    notCollected: "Not collected",
+    checkingAnitabi: "Checking Anitabi",
+    anitabiSpots: "Anitabi {count} spots",
+  },
+};
+
+function t(key, values = {}) {
+  let text = I18N[state.language]?.[key] || I18N.zh[key] || key;
+  Object.entries(values).forEach(([name, value]) => {
+    text = text.replaceAll(`{${name}}`, value);
+  });
+  return text;
+}
+
+function applyLanguage(language = state.language) {
+  state.language = language;
+  document.documentElement.lang = language === "en" ? "en" : "zh-CN";
+  document.title = language === "en" ? "Anitabi Trip Planner Demo" : "Anitabi 巡礼路线 Demo";
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    element.textContent = t(element.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-attr]").forEach((element) => {
+    element.dataset.i18nAttr.split(";").forEach((entry) => {
+      const [attr, key] = entry.split(":");
+      if (attr && key) element.setAttribute(attr, t(key));
+    });
+  });
+  $("languageSelect").value = state.language;
+  renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
+  if (state.routeClusters.length === 0) renderInitialPanels();
+}
 
 const map = L.map("map", { zoomControl: false }).setView([34.8909, 135.8074], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -180,7 +349,7 @@ function syncStateFromSubjectInput() {
     id: String(id),
     title: `Bangumi ${id}`,
     image: "",
-    meta: "手动输入",
+    meta: t("manualInput"),
   });
   renderSelectedSubjects();
   state.selectedSubjects.forEach((subject) => checkAnitabiCoverage(subject));
@@ -206,7 +375,7 @@ function selectAllSearchResults() {
   const selectedIds = new Set(state.selectedSubjects.map((subject) => String(subject.id)));
   const subjectsToAdd = state.searchResults.filter((subject) => !selectedIds.has(String(subject.id)));
   if (subjectsToAdd.length === 0) {
-    setStatus("当前搜索结果没有可新增作品。");
+    setStatus(t("noNewSearchResults"));
     return;
   }
   subjectsToAdd.forEach((subject) => {
@@ -222,19 +391,19 @@ function selectAllSearchResults() {
   renderSelectedSubjects();
   subjectsToAdd.forEach((subject) => checkAnitabiCoverage(subject));
   renderBangumiSearchResults(state.searchResults);
-  setStatus(`已加入 ${subjectsToAdd.length} 个搜索结果。`);
+  setStatus(t("addedSearchResults", { count: subjectsToAdd.length }));
 }
 
 function clearSelectedSubjects() {
   if (state.selectedSubjects.length === 0) {
-    setStatus("当前没有已选作品。");
+    setStatus(t("noSelectedStatus"));
     return;
   }
   state.selectedSubjects = [];
   syncSubjectInputFromState();
   renderSelectedSubjects();
   renderBangumiSearchResults(state.searchResults);
-  setStatus("已清空已选作品。");
+  setStatus(t("clearedSubjects"));
 }
 
 function removeMissingSubjects() {
@@ -244,13 +413,13 @@ function removeMissingSubjects() {
   ));
   const removed = before - state.selectedSubjects.length;
   if (removed === 0) {
-    setStatus("当前没有已确认未收录的作品。");
+    setStatus(t("noMissingSubjects"));
     return;
   }
   syncSubjectInputFromState();
   renderSelectedSubjects();
   renderBangumiSearchResults(state.searchResults);
-  setStatus(`已移除 ${removed} 个 Anitabi 未收录作品。`);
+  setStatus(t("removedMissingSubjects", { count: removed }));
 }
 
 function removeSelectedSubject(subjectId) {
@@ -264,7 +433,7 @@ function renderSelectedSubjects() {
   const container = $("selectedSubjects");
   container.innerHTML = "";
   if (state.selectedSubjects.length === 0) {
-    container.innerHTML = '<div class="empty">尚未选择作品。可以搜索 Bangumi 条目或手动输入 ID。</div>';
+    container.innerHTML = `<div class="empty">${t("noSelectedSubjects")}</div>`;
     return;
   }
 
@@ -273,15 +442,15 @@ function renderSelectedSubjects() {
     const coverage = state.anitabiCoverage.get(String(subject.id));
     item.className = `subject-chip${coverage?.status === "missing" ? " unavailable" : ""}`;
     const coverageText = coverage
-      ? ` · Anitabi ${coverage.status === "available" ? `${coverage.count} 个巡礼点` : "未收录"}`
-      : " · 正在检查 Anitabi";
+      ? ` · ${coverage.status === "available" ? t("anitabiSpots", { count: coverage.count }) : t("notCollected")}`
+      : ` · ${t("checkingAnitabi")}`;
     item.innerHTML = `
       <img alt="" src="${subject.image || ""}" loading="lazy" />
       <div class="subject-title">
         <strong>${escapeHtml(subject.title)}</strong>
         <span>${escapeHtml((subject.meta || `Bangumi ${subject.id}`) + coverageText)}</span>
       </div>
-      <button class="secondary mini-button" type="button" data-remove-subject="${subject.id}">移除</button>
+      <button class="secondary mini-button" type="button" data-remove-subject="${subject.id}">${t("remove")}</button>
     `;
     container.appendChild(item);
   });
@@ -294,12 +463,12 @@ function renderBangumiSearchResults(subjects) {
   const availableSubjects = subjects.filter((subject) => !selectedIds.has(String(subject.id)));
 
   if (subjects.length === 0) {
-    container.innerHTML = '<div class="empty">搜索作品后会显示候选条目。</div>';
+    container.innerHTML = `<div class="empty">${t("searchPrompt")}</div>`;
     return;
   }
 
   if (availableSubjects.length === 0) {
-    container.innerHTML = '<div class="empty">搜索结果都已加入作品集合。</div>';
+    container.innerHTML = `<div class="empty">${t("allSearchSelected")}</div>`;
     return;
   }
 
@@ -312,7 +481,7 @@ function renderBangumiSearchResults(subjects) {
         <strong>${escapeHtml(subjectTitle(subject))}</strong>
         <span>${escapeHtml(subjectMeta(subject))}</span>
       </div>
-      <button class="mini-button" type="button" data-add-subject="${subject.id}">加入</button>
+      <button class="mini-button" type="button" data-add-subject="${subject.id}">${t("add")}</button>
     `;
     item.querySelector("[data-add-subject]").addEventListener("click", () => addSelectedSubject(subject));
     container.appendChild(item);
@@ -927,6 +1096,7 @@ function updateShareUrl(push = false) {
   params.set("intensity", $("intensitySelect").value);
   params.set("start", $("dayStartInput").value);
   params.set("end", $("dayEndInput").value);
+  params.set("lang", state.language);
   const url = `${window.location.pathname}?${params.toString()}`;
   window.history[push ? "pushState" : "replaceState"](null, "", url);
 }
@@ -958,6 +1128,7 @@ function applyUrlParams() {
   if (params.has("intensity")) $("intensitySelect").value = params.get("intensity");
   if (params.has("start")) $("dayStartInput").value = params.get("start");
   if (params.has("end")) $("dayEndInput").value = params.get("end");
+  if (params.has("lang")) applyLanguage(params.get("lang") === "en" ? "en" : "zh");
   syncUserMarker("分享链接");
 }
 
@@ -1045,8 +1216,8 @@ function exportKml() {
 }
 
 function renderInitialPanels() {
-  $("routePanel").innerHTML = '<div class="empty">请选择作品集合，然后生成路线。</div>';
-  $("nearbyPanel").innerHTML = '<div class="empty">请选择作品集合，然后查看附近圣地。</div>';
+  $("routePanel").innerHTML = `<div class="empty">${t("chooseAndPlan")}</div>`;
+  $("nearbyPanel").innerHTML = `<div class="empty">${t("chooseAndNearby")}</div>`;
 }
 
 async function planTrip(nearbyOnly = false) {
@@ -1127,6 +1298,11 @@ $("routeModeSelect").addEventListener("change", () => updateShareUrl(false));
 $("intensitySelect").addEventListener("change", () => updateShareUrl(false));
 $("dayStartInput").addEventListener("change", () => updateShareUrl(false));
 $("dayEndInput").addEventListener("change", () => updateShareUrl(false));
+$("languageSelect").addEventListener("change", (event) => {
+  applyLanguage(event.target.value);
+  updateShareUrl(false);
+  setStatus(t("ready"));
+});
 $("latInput").addEventListener("change", () => {
   try {
     syncUserMarker("手动输入");
@@ -1195,8 +1371,8 @@ map.on("click", (event) => {
   setStatus("已通过地图点击更新出发点。");
 });
 
+applyLanguage(new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh");
 applyUrlParams();
-renderSelectedSubjects();
 renderInitialPanels();
 renderRangeCircle();
-setStatus("请选择作品集合并生成路线。");
+setStatus(t("chooseAndPlan"));
