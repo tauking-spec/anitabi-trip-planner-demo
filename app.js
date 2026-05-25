@@ -64,10 +64,10 @@ function getRadiusKm() {
   return Number($("radiusSelect").value);
 }
 
-function setLocation(lat, lng, label = "当前位置") {
+function setLocation(lat, lng, label = "当前位置", zoom = 14) {
   $("latInput").value = Number(lat).toFixed(6);
   $("lngInput").value = Number(lng).toFixed(6);
-  const location = syncUserMarker(label);
+  const location = syncUserMarker(label, zoom);
   return location;
 }
 
@@ -78,14 +78,15 @@ function getLocation() {
   };
 }
 
-function syncUserMarker(label = "当前位置") {
+function syncUserMarker(label = "当前位置", zoom = 14) {
   const location = getLocation();
   if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
     throw new Error("请输入有效经纬度");
   }
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   renderRangeCircle(location);
-  map.setView([location.lat, location.lng], Math.max(map.getZoom(), 12));
+  map.invalidateSize();
+  map.setView([location.lat, location.lng], Math.max(map.getZoom(), zoom), { animate: true });
   return location;
 }
 
