@@ -27,7 +27,6 @@
             <legend>当前位置</legend>
             <div class="row">
               <button id="locateBtn" type="button">使用浏览器定位</button>
-              <button id="demoLocationBtn" type="button" class="secondary">宇治示例</button>
             </div>
             <div class="search-box">
               <label>
@@ -52,14 +51,6 @@
 
           <fieldset class="control-group">
             <legend>作品集合</legend>
-            <label>
-              榜单/主题
-              <select id="presetSelect">
-                <option value="kyoto">京都近郊巡礼样例</option>
-                <option value="japan-classics">日本经典动画样例</option>
-                <option value="custom">自定义 Bangumi ID</option>
-              </select>
-            </label>
             <div class="search-box">
               <label>
                 Bangumi 动画搜索
@@ -74,7 +65,7 @@
             </div>
             <label>
               Bangumi subject ID，用逗号分隔
-              <input id="subjectInput" value="115908, 2581, 126461" />
+              <input id="subjectInput" placeholder="例如 115908, 2581" />
             </label>
             <p class="hint">搜索使用 Bangumi 公开 API；手动 ID 输入仍保留，便于导入榜单或外部映射结果。</p>
           </fieldset>

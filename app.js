@@ -2,59 +2,6 @@ const API_BASE = "https://api.anitabi.cn";
 const BANGUMI_API_BASE = "https://api.bgm.tv";
 const NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org";
 
-const PRESETS = {
-  kyoto: [
-    { id: "115908", title: "吹响吧！上低音号" },
-    { id: "2581", title: "轻音少女" },
-    { id: "126461", title: "境界的彼方" },
-  ],
-  "japan-classics": [
-    { id: "115908", title: "吹响吧！上低音号" },
-    { id: "126461", title: "境界的彼方" },
-    { id: "111723", title: "你的名字。" },
-    { id: "1428", title: "凉宫春日的忧郁" },
-  ],
-};
-
-const FALLBACK_POINTS = [
-  {
-    id: "demo-uji-1",
-    bangumiId: 115908,
-    workTitle: "吹响吧！上低音号",
-    name: "宇治桥",
-    image: "https://image.anitabi.cn/points/115908/qys7fu.jpg?plan=h160",
-    ep: 1,
-    s: 1,
-    geo: [34.8914, 135.8069],
-    origin: "Anitabi demo fallback",
-    originURL: "https://anitabi.cn/map?bangumiId=115908",
-  },
-  {
-    id: "demo-uji-2",
-    bangumiId: 115908,
-    workTitle: "吹响吧！上低音号",
-    name: "宇治神社附近",
-    image: "https://image.anitabi.cn/bangumi/115908.jpg?plan=h160",
-    ep: 1,
-    s: 1,
-    geo: [34.8919, 135.8112],
-    origin: "Anitabi demo fallback",
-    originURL: "https://anitabi.cn/map?bangumiId=115908",
-  },
-  {
-    id: "demo-kyoto-1",
-    bangumiId: 2581,
-    workTitle: "轻音少女",
-    name: "京都市内巡礼点",
-    image: "https://image.anitabi.cn/bangumi/2581.jpg?plan=h160",
-    ep: 1,
-    s: 1,
-    geo: [35.0116, 135.7681],
-    origin: "Anitabi demo fallback",
-    originURL: "https://anitabi.cn/map?bangumiId=2581",
-  },
-];
-
 const state = {
   points: [],
   markers: [],
@@ -71,8 +18,35 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
 }).addTo(map);
 
+const startIcon = L.divIcon({
+  className: "",
+  html: '<span class="map-marker start-marker">起</span>',
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
+  popupAnchor: [0, -18],
+});
+
+const pilgrimageIcon = L.divIcon({
+  className: "",
+  html: '<span class="map-marker pilgrimage-marker">巡</span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+  popupAnchor: [0, -12],
+});
+
+function routeIcon(index) {
+  return L.divIcon({
+    className: "",
+    html: `<span class="map-marker route-marker">${index + 1}</span>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
+  });
+}
+
 const userMarker = L.marker([34.8909, 135.8074], {
   title: "当前位置",
+  icon: startIcon,
 }).addTo(map);
 
 function setStatus(message) {
@@ -361,22 +335,12 @@ async function loadPoints() {
   if (ids.length === 0) throw new Error("请至少输入一个 Bangumi subject ID");
 
   setStatus(`正在读取 ${ids.length} 个作品的 Anitabi 地标...`);
-  try {
-    const batches = await Promise.all(ids.map(fetchSubjectPoints));
-    const points = batches.flat();
-    if (points.length === 0) throw new Error("没有读取到含坐标的地标");
-    state.points = points;
-    setStatus(`已读取 ${points.length} 个地标，来自 ${ids.length} 个作品。`);
-    return points;
-  } catch (error) {
-    console.warn(error);
-    state.points = FALLBACK_POINTS.map((point) => ({
-      ...point,
-      displayName: point.name,
-    }));
-    setStatus("Anitabi API 暂不可用，已切换到内置示例数据。");
-    return state.points;
-  }
+  const batches = await Promise.all(ids.map(fetchSubjectPoints));
+  const points = batches.flat();
+  if (points.length === 0) throw new Error("没有读取到含坐标的地标");
+  state.points = points;
+  setStatus(`已读取 ${points.length} 个地标，来自 ${ids.length} 个作品。`);
+  return points;
 }
 
 function rankedNearby(points, location, radiusKm) {
@@ -424,13 +388,16 @@ function clearMap() {
 
 function renderMap(points, routeDays = []) {
   clearMap();
-  const routePointIds = new Set(routeDays.flat().map((point) => point.id));
+  const routeIndexes = new Map(routeDays.flat().map((point, index) => [point.id, index]));
 
   points.forEach((point) => {
-    const marker = L.marker([point.geo[0], point.geo[1]])
+    const routeIndex = routeIndexes.get(point.id);
+    const marker = L.marker([point.geo[0], point.geo[1]], {
+      icon: routeIndex === undefined ? pilgrimageIcon : routeIcon(routeIndex),
+    })
       .bindPopup(`<strong>${escapeHtml(point.displayName)}</strong><br>${escapeHtml(point.workTitle)}`)
       .addTo(map);
-    if (routePointIds.has(point.id)) marker.setZIndexOffset(1000);
+    if (routeIndex !== undefined) marker.setZIndexOffset(1000);
     state.markers.push(marker);
   });
 
@@ -516,6 +483,11 @@ function renderNearby(points) {
   points.slice(0, 24).forEach((point, index) => panel.appendChild(createPointCard(point, index)));
 }
 
+function renderInitialPanels() {
+  $("routePanel").innerHTML = '<div class="empty">请选择作品集合，然后生成路线。</div>';
+  $("nearbyPanel").innerHTML = '<div class="empty">请选择作品集合，然后查看附近圣地。</div>';
+}
+
 async function planTrip(nearbyOnly = false) {
   try {
     const location = syncUserMarker();
@@ -548,22 +520,6 @@ function setActiveTab(tab) {
   $("routePanel").classList.toggle("hidden", tab !== "route");
   $("nearbyPanel").classList.toggle("hidden", tab !== "nearby");
 }
-
-$("presetSelect").addEventListener("change", (event) => {
-  const subjects = PRESETS[event.target.value];
-  if (!subjects) return;
-  state.selectedSubjects = subjects.map((subject) => ({
-    ...subject,
-    image: "",
-    meta: "内置样例",
-  }));
-  syncSubjectInputFromState();
-  renderSelectedSubjects();
-});
-
-$("demoLocationBtn").addEventListener("click", () => {
-  setLocation(34.8909, 135.8074, "宇治示例");
-});
 
 $("locateBtn").addEventListener("click", () => {
   if (!navigator.geolocation) {
@@ -603,10 +559,6 @@ map.on("click", (event) => {
   setStatus("已通过地图点击更新出发点。");
 });
 
-state.selectedSubjects = PRESETS.kyoto.map((subject) => ({
-  ...subject,
-  image: "",
-  meta: "内置样例",
-}));
 renderSelectedSubjects();
-planTrip(false);
+renderInitialPanels();
+setStatus("请选择作品集合并生成路线。");

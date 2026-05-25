@@ -8,6 +8,8 @@
   --line: #dbe2da;
   --accent: #147d64;
   --accent-strong: #0b5d4a;
+  --route: #2f6fe4;
+  --start: #d9482f;
   --warn: #8a5b13;
   --shadow: 0 18px 60px rgba(33, 48, 39, 0.12);
 }
@@ -176,6 +178,40 @@ legend {
 
 .actions button {
   flex: 1;
+}
+
+.map-marker {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: white;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgba(30, 37, 32, 0.28);
+}
+
+.start-marker {
+  width: 34px;
+  height: 34px;
+  border: 3px solid white;
+  background: var(--start);
+  font-size: 16px;
+}
+
+.pilgrimage-marker {
+  width: 22px;
+  height: 22px;
+  border: 2px solid white;
+  background: var(--accent);
+  font-size: 11px;
+}
+
+.route-marker {
+  width: 28px;
+  height: 28px;
+  border: 2px solid white;
+  background: var(--route);
+  font-size: 12px;
 }
 
 .search-box {
