@@ -6,7 +6,7 @@
 
 - 根据用户当前位置和作品集合，规划一日或多日巡礼路线。
 - 根据当前位置展示附近最近的动画圣地。
-- 支持内置作品集合与自定义 Bangumi subject ID。
+- 支持 Bangumi 公开 API 搜索动画条目、加入作品集合，以及手动导入 Bangumi subject ID。
 - 直接在浏览器中完成位置计算，不上传用户位置到自建服务。
 - 保留 Anitabi、截图来源与原链接展示，避免隐藏数据来源。
 
@@ -31,6 +31,11 @@ http://localhost:8080
 - `https://api.anitabi.cn/bangumi/{subjectID}/lite`
 - `https://api.anitabi.cn/bangumi/{subjectID}/points/detail?haveImage=true`
 
+作品搜索使用 Bangumi 公开 API：
+
+- `POST https://api.bgm.tv/v0/search/subjects?limit=8&offset=0`
+- 请求体使用 `keyword` 搜索，并通过 `filter.type: [2]` 限定动画条目。
+
 根据 Anitabi 文档与 App 说明，相关内容遵循 CC BY-NC-SA 4.0：
 
 - 必须署名并保留来源。
@@ -43,6 +48,7 @@ http://localhost:8080
 ## 正式产品前提
 
 - 需要稳定的作品 ID 映射服务，把 IMDb、Bangumi、AniList 或自定义榜单映射为 Bangumi subject ID。
+- 使用 Bangumi API 时应遵守其 User-Agent 建议；纯前端浏览器无法自定义 User-Agent，正式产品更适合通过自有后端代理搜索并做限流。
 - 需要缓存层与限流策略，避免浏览器用户直接高频请求 Anitabi。
 - 需要路线算法升级，例如按城市聚类、营业时间、交通方式、每日步行距离和用户收藏权重排序。
 - 需要更完整的版权与投稿协议设计，尤其是用户新增点位、用户实拍图和动画截图的权利边界。

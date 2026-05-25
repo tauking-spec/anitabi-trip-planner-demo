@@ -1,8 +1,18 @@
 const API_BASE = "https://api.anitabi.cn";
+const BANGUMI_API_BASE = "https://api.bgm.tv";
 
 const PRESETS = {
-  kyoto: ["115908", "2581", "126461"],
-  "japan-classics": ["115908", "126461", "111723", "1428"],
+  kyoto: [
+    { id: "115908", title: "吹响吧！上低音号" },
+    { id: "2581", title: "轻音少女" },
+    { id: "126461", title: "境界的彼方" },
+  ],
+  "japan-classics": [
+    { id: "115908", title: "吹响吧！上低音号" },
+    { id: "126461", title: "境界的彼方" },
+    { id: "111723", title: "你的名字。" },
+    { id: "1428", title: "凉宫春日的忧郁" },
+  ],
 };
 
 const FALLBACK_POINTS = [
@@ -49,6 +59,7 @@ const state = {
   markers: [],
   routeLine: null,
   currentView: "route",
+  selectedSubjects: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -87,6 +98,140 @@ function syncUserMarker() {
 function getSubjectIds() {
   const raw = $("subjectInput").value;
   return [...new Set(raw.split(/[,，\s]+/).map((id) => id.trim()).filter(Boolean))];
+}
+
+function subjectCover(subject) {
+  return subject.images?.grid || subject.images?.small || subject.images?.common || "";
+}
+
+function subjectTitle(subject) {
+  return subject.name_cn || subject.name || `Bangumi ${subject.id}`;
+}
+
+function subjectMeta(subject) {
+  const score = subject.rating?.score ? `评分 ${subject.rating.score}` : "暂无评分";
+  const rank = subject.rating?.rank ? `Rank #${subject.rating.rank}` : "暂无排名";
+  const date = subject.date || "日期未知";
+  return `${date} · ${score} · ${rank}`;
+}
+
+function syncSubjectInputFromState() {
+  $("subjectInput").value = state.selectedSubjects.map((subject) => subject.id).join(", ");
+}
+
+function syncStateFromSubjectInput() {
+  const existing = new Map(state.selectedSubjects.map((subject) => [String(subject.id), subject]));
+  state.selectedSubjects = getSubjectIds().map((id) => existing.get(String(id)) || {
+    id: String(id),
+    title: `Bangumi ${id}`,
+    image: "",
+    meta: "手动输入",
+  });
+  renderSelectedSubjects();
+}
+
+function addSelectedSubject(subject) {
+  const id = String(subject.id);
+  if (state.selectedSubjects.some((item) => String(item.id) === id)) return;
+  state.selectedSubjects.push({
+    id,
+    title: subjectTitle(subject),
+    name: subject.name || "",
+    image: subjectCover(subject),
+    meta: subjectMeta(subject),
+  });
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+}
+
+function removeSelectedSubject(subjectId) {
+  state.selectedSubjects = state.selectedSubjects.filter((subject) => String(subject.id) !== String(subjectId));
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+}
+
+function renderSelectedSubjects() {
+  const container = $("selectedSubjects");
+  container.innerHTML = "";
+  if (state.selectedSubjects.length === 0) {
+    container.innerHTML = '<div class="empty">尚未选择作品。可以搜索 Bangumi 条目或手动输入 ID。</div>';
+    return;
+  }
+
+  state.selectedSubjects.forEach((subject) => {
+    const item = document.createElement("div");
+    item.className = "subject-chip";
+    item.innerHTML = `
+      <img alt="" src="${subject.image || ""}" loading="lazy" />
+      <div class="subject-title">
+        <strong>${escapeHtml(subject.title)}</strong>
+        <span>${escapeHtml(subject.meta || `Bangumi ${subject.id}`)}</span>
+      </div>
+      <button class="secondary mini-button" type="button" data-remove-subject="${subject.id}">移除</button>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function renderBangumiSearchResults(subjects) {
+  const container = $("bangumiSearchResults");
+  container.innerHTML = "";
+  if (subjects.length === 0) {
+    container.innerHTML = '<div class="empty">没有找到动画条目。</div>';
+    return;
+  }
+
+  subjects.forEach((subject) => {
+    const item = document.createElement("div");
+    item.className = "subject-result";
+    item.innerHTML = `
+      <img alt="" src="${subjectCover(subject)}" loading="lazy" />
+      <div class="subject-title">
+        <strong>${escapeHtml(subjectTitle(subject))}</strong>
+        <span>${escapeHtml(subjectMeta(subject))}</span>
+      </div>
+      <button class="mini-button" type="button" data-add-subject="${subject.id}">加入</button>
+    `;
+    item.querySelector("[data-add-subject]").addEventListener("click", () => addSelectedSubject(subject));
+    container.appendChild(item);
+  });
+}
+
+async function searchBangumiSubjects() {
+  const keyword = $("bangumiSearchInput").value.trim();
+  if (!keyword) {
+    setStatus("请输入 Bangumi 搜索关键词。");
+    return;
+  }
+
+  setStatus(`正在搜索 Bangumi：${keyword}`);
+  try {
+    const response = await fetch(`${BANGUMI_API_BASE}/v0/search/subjects?limit=8&offset=0`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        keyword,
+        sort: "rank",
+        filter: {
+          type: [2],
+          nsfw: false,
+        },
+      }),
+    });
+    if (!response.ok) throw new Error(`Bangumi API 请求失败：${response.status}`);
+    const payload = await response.json();
+    const subjects = Array.isArray(payload.data) ? payload.data : [];
+    renderBangumiSearchResults(subjects);
+    setStatus(`Bangumi 返回 ${subjects.length} 个动画条目。`);
+  } catch (error) {
+    console.warn(error);
+    $("bangumiSearchResults").innerHTML =
+      '<div class="empty">Bangumi 搜索暂不可用。可以继续手动输入 Bangumi subject ID。</div>';
+    setStatus(error.message);
+  }
 }
 
 function secondsToText(seconds) {
@@ -334,8 +479,15 @@ function setActiveTab(tab) {
 }
 
 $("presetSelect").addEventListener("change", (event) => {
-  const ids = PRESETS[event.target.value];
-  if (ids) $("subjectInput").value = ids.join(", ");
+  const subjects = PRESETS[event.target.value];
+  if (!subjects) return;
+  state.selectedSubjects = subjects.map((subject) => ({
+    ...subject,
+    image: "",
+    meta: "内置样例",
+  }));
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
 });
 
 $("demoLocationBtn").addEventListener("click", () => {
@@ -366,5 +518,20 @@ $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
+$("bangumiSearchBtn").addEventListener("click", () => searchBangumiSubjects());
+$("bangumiSearchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") searchBangumiSubjects();
+});
+$("subjectInput").addEventListener("change", () => syncStateFromSubjectInput());
+$("selectedSubjects").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-subject]");
+  if (button) removeSelectedSubject(button.dataset.removeSubject);
+});
 
+state.selectedSubjects = PRESETS.kyoto.map((subject) => ({
+  ...subject,
+  image: "",
+  meta: "内置样例",
+}));
+renderSelectedSubjects();
 planTrip(false);

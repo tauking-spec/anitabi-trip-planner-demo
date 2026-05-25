@@ -178,6 +178,71 @@ legend {
   flex: 1;
 }
 
+.search-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.section-label {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.subject-results,
+.selected-subjects {
+  display: grid;
+  gap: 8px;
+}
+
+.subject-result,
+.subject-chip {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 8px;
+}
+
+.subject-result img,
+.subject-chip img {
+  width: 44px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: var(--surface-soft);
+}
+
+.subject-title {
+  min-width: 0;
+}
+
+.subject-title strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.subject-title span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
+.mini-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 .status {
   min-height: 38px;
   border: 1px solid var(--line);
@@ -339,6 +404,7 @@ legend {
   }
 
   .grid-2,
+  .search-box,
   .point-card {
     grid-template-columns: 1fr;
   }
