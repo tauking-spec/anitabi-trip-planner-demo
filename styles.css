@@ -307,7 +307,20 @@ legend {
 .section-label {
   color: var(--muted);
   font-size: 13px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.micro-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .subject-picker {

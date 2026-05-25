@@ -189,6 +189,41 @@ function addSelectedSubject(subject) {
   renderBangumiSearchResults(state.searchResults);
 }
 
+function selectAllSearchResults() {
+  const selectedIds = new Set(state.selectedSubjects.map((subject) => String(subject.id)));
+  const subjectsToAdd = state.searchResults.filter((subject) => !selectedIds.has(String(subject.id)));
+  if (subjectsToAdd.length === 0) {
+    setStatus("当前搜索结果没有可新增作品。");
+    return;
+  }
+  subjectsToAdd.forEach((subject) => {
+    state.selectedSubjects.push({
+      id: String(subject.id),
+      title: subjectTitle(subject),
+      name: subject.name || "",
+      image: subjectCover(subject),
+      meta: subjectMeta(subject),
+    });
+  });
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+  subjectsToAdd.forEach((subject) => checkAnitabiCoverage(subject));
+  renderBangumiSearchResults(state.searchResults);
+  setStatus(`已加入 ${subjectsToAdd.length} 个搜索结果。`);
+}
+
+function clearSelectedSubjects() {
+  if (state.selectedSubjects.length === 0) {
+    setStatus("当前没有已选作品。");
+    return;
+  }
+  state.selectedSubjects = [];
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
+  setStatus("已清空已选作品。");
+}
+
 function removeSelectedSubject(subjectId) {
   state.selectedSubjects = state.selectedSubjects.filter((subject) => String(subject.id) !== String(subjectId));
   syncSubjectInputFromState();
@@ -1086,6 +1121,8 @@ $("bangumiSearchBtn").addEventListener("click", () => searchBangumiSubjects());
 $("bangumiSearchInput").addEventListener("keydown", (event) => {
   if (event.key === "Enter") searchBangumiSubjects();
 });
+$("selectAllSubjectsBtn").addEventListener("click", () => selectAllSearchResults());
+$("clearSubjectsBtn").addEventListener("click", () => clearSelectedSubjects());
 $("subjectInput").addEventListener("change", () => syncStateFromSubjectInput());
 $("selectedSubjects").addEventListener("click", (event) => {
   const button = event.target.closest("[data-remove-subject]");
