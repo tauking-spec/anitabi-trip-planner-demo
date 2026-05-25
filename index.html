@@ -88,10 +88,6 @@
               </label>
             </div>
             <label>
-              不选作品时的最近圣地数量
-              <input id="nearestCountInput" type="number" min="1" max="100" value="24" />
-            </label>
-            <label>
               搜索半径
               <select id="radiusSelect">
                 <option value="5">5 km</option>
@@ -101,11 +97,30 @@
                 <option value="99999">不限</option>
               </select>
             </label>
+            <div class="grid-2">
+              <label>
+                每日开始
+                <input id="dayStartInput" type="time" value="10:00" />
+              </label>
+              <label>
+                每日结束
+                <input id="dayEndInput" type="time" value="18:00" />
+              </label>
+            </div>
+            <label>
+              路线强度
+              <select id="intensitySelect">
+                <option value="relaxed">轻松</option>
+                <option value="standard" selected>标准</option>
+                <option value="hardcore">硬核</option>
+              </select>
+            </label>
             <label>
               路线模式
               <select id="routeModeSelect">
                 <option value="normal" selected>完整路线</option>
                 <option value="dense">只看高密度区域</option>
+                <option value="loop">环路路线</option>
               </select>
             </label>
           </fieldset>

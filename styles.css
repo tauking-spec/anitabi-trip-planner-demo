@@ -345,6 +345,15 @@ legend {
   padding-bottom: 46px;
 }
 
+.subject-chip.unavailable {
+  border-color: #e19a8f;
+  background: #fff1ef;
+}
+
+.subject-chip.unavailable .subject-title strong {
+  color: #a33424;
+}
+
 .location-result {
   grid-template-columns: 1fr auto;
 }

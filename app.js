@@ -16,6 +16,7 @@ const state = {
   anitabiCoverage: new Map(),
   expandedClusters: new Map(),
   routeClusters: [],
+  routeDays: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +68,26 @@ function getRadiusKm() {
 
 function getRouteMode() {
   return $("routeModeSelect").value;
+}
+
+function getIntensitySettings() {
+  const value = $("intensitySelect").value;
+  return {
+    relaxed: { stopMinutes: 60, stopMultiplier: 0.75 },
+    standard: { stopMinutes: 40, stopMultiplier: 1 },
+    hardcore: { stopMinutes: 25, stopMultiplier: 1.25 },
+  }[value] || { stopMinutes: 40, stopMultiplier: 1 };
+}
+
+function timeToMinutes(value) {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function dailyBudgetMinutes() {
+  const start = timeToMinutes($("dayStartInput").value || "10:00");
+  const end = timeToMinutes($("dayEndInput").value || "18:00");
+  return Math.max(120, end > start ? end - start : 480);
 }
 
 function setLocation(lat, lng, label = "当前位置", zoom = 14) {
@@ -149,6 +170,7 @@ function syncStateFromSubjectInput() {
     meta: "手动输入",
   });
   renderSelectedSubjects();
+  state.selectedSubjects.forEach((subject) => checkAnitabiCoverage(subject));
 }
 
 function addSelectedSubject(subject) {
@@ -163,6 +185,7 @@ function addSelectedSubject(subject) {
   });
   syncSubjectInputFromState();
   renderSelectedSubjects();
+  checkAnitabiCoverage(state.selectedSubjects[state.selectedSubjects.length - 1]);
   renderBangumiSearchResults(state.searchResults);
 }
 
@@ -183,12 +206,16 @@ function renderSelectedSubjects() {
 
   state.selectedSubjects.forEach((subject) => {
     const item = document.createElement("div");
-    item.className = "subject-chip";
+    const coverage = state.anitabiCoverage.get(String(subject.id));
+    item.className = `subject-chip${coverage?.status === "missing" ? " unavailable" : ""}`;
+    const coverageText = coverage
+      ? ` · Anitabi ${coverage.status === "available" ? `${coverage.count} 个巡礼点` : "未收录"}`
+      : " · 正在检查 Anitabi";
     item.innerHTML = `
       <img alt="" src="${subject.image || ""}" loading="lazy" />
       <div class="subject-title">
         <strong>${escapeHtml(subject.title)}</strong>
-        <span>${escapeHtml(subject.meta || `Bangumi ${subject.id}`)}</span>
+        <span>${escapeHtml((subject.meta || `Bangumi ${subject.id}`) + coverageText)}</span>
       </div>
       <button class="secondary mini-button" type="button" data-remove-subject="${subject.id}">移除</button>
     `;
@@ -213,17 +240,13 @@ function renderBangumiSearchResults(subjects) {
   }
 
   availableSubjects.forEach((subject) => {
-    const coverage = state.anitabiCoverage.get(String(subject.id));
-    const coverageText = coverage
-      ? ` · Anitabi ${coverage.status === "available" ? `${coverage.count} 个巡礼点` : "未收录"}`
-      : " · 正在检查 Anitabi";
     const item = document.createElement("div");
     item.className = "subject-result";
     item.innerHTML = `
       <img alt="" src="${subjectCover(subject)}" loading="lazy" />
       <div class="subject-title">
         <strong>${escapeHtml(subjectTitle(subject))}</strong>
-        <span>${escapeHtml(subjectMeta(subject) + coverageText)}</span>
+        <span>${escapeHtml(subjectMeta(subject))}</span>
       </div>
       <button class="mini-button" type="button" data-add-subject="${subject.id}">加入</button>
     `;
@@ -247,7 +270,7 @@ async function checkAnitabiCoverage(subject) {
   } catch {
     state.anitabiCoverage.set(id, { status: "missing", count: 0 });
   }
-  renderBangumiSearchResults(state.searchResults);
+  renderSelectedSubjects();
 }
 
 async function searchBangumiSubjects() {
@@ -279,7 +302,6 @@ async function searchBangumiSubjects() {
     const subjects = Array.isArray(payload.data) ? payload.data : [];
     state.searchResults = subjects;
     renderBangumiSearchResults(subjects);
-    subjects.forEach((subject) => checkAnitabiCoverage(subject));
     setStatus(`Bangumi 返回 ${subjects.length} 个动画条目。`);
   } catch (error) {
     console.warn(error);
@@ -500,14 +522,42 @@ function transportForDistance(distanceKm) {
   return { mode: "铁路/自驾", time: `${Math.round((distanceKm / 55) * 60 + 20)} 分钟` };
 }
 
-function orderClustersByNearest(clusters, location, days, stopsPerDay) {
+function travelMinutes(distanceKm) {
+  return Number(transportForDistance(distanceKm).time.replace(/\D/g, "")) || 0;
+}
+
+function orderClustersForLoop(clusters, origin) {
+  if (clusters.length <= 2) return clusters;
+  const center = {
+    lat: clusters.reduce((sum, cluster) => sum + cluster.center.lat, 0) / clusters.length,
+    lng: clusters.reduce((sum, cluster) => sum + cluster.center.lng, 0) / clusters.length,
+  };
+  const sorted = [...clusters].sort((a, b) => (
+    Math.atan2(a.center.lat - center.lat, a.center.lng - center.lng) -
+    Math.atan2(b.center.lat - center.lat, b.center.lng - center.lng)
+  ));
+  const startIndex = sorted.reduce((bestIndex, cluster, index) => (
+    haversineKm(origin, cluster.center) < haversineKm(origin, sorted[bestIndex].center) ? index : bestIndex
+  ), 0);
+  const clockwise = [...sorted.slice(startIndex), ...sorted.slice(0, startIndex)];
+  const counterClockwise = [clockwise[0], ...clockwise.slice(1).reverse()];
+  const clockwiseEnd = haversineKm(origin, clockwise[clockwise.length - 1].center);
+  const counterEnd = haversineKm(origin, counterClockwise[counterClockwise.length - 1].center);
+  return clockwiseEnd <= counterEnd ? clockwise : counterClockwise;
+}
+
+function orderClustersByNearest(clusters, location, days, stopsPerDay, options = {}) {
   const remaining = [...clusters];
   const route = [];
+  const settings = getIntensitySettings();
+  const budget = dailyBudgetMinutes();
+  const effectiveStops = Math.max(1, Math.round(stopsPerDay * settings.stopMultiplier));
   let cursor = { lat: location.lat, lng: location.lng };
 
   for (let day = 0; day < days; day += 1) {
     const stops = [];
-    for (let i = 0; i < stopsPerDay && remaining.length > 0; i += 1) {
+    let usedMinutes = 0;
+    for (let i = 0; i < effectiveStops && remaining.length > 0; i += 1) {
       remaining.sort((a, b) => {
         const da = haversineKm(cursor, a.center);
         const db = haversineKm(cursor, b.center);
@@ -516,10 +566,25 @@ function orderClustersByNearest(clusters, location, days, stopsPerDay) {
       const next = remaining.shift();
       next.legKm = haversineKm(cursor, next.center);
       next.transport = transportForDistance(next.legKm);
+      const nextMinutes = travelMinutes(next.legKm) + settings.stopMinutes;
+      if (stops.length > 0 && usedMinutes + nextMinutes > budget) {
+        remaining.unshift(next);
+        break;
+      }
+      next.stayMinutes = settings.stopMinutes;
       stops.push(next);
+      usedMinutes += nextMinutes;
       cursor = next.center;
     }
-    if (stops.length > 0) route.push(stops);
+    if (stops.length > 0) {
+      const orderedStops = options.loop ? orderClustersForLoop(stops, location) : stops;
+      orderedStops.forEach((stop, index) => {
+        const previous = index === 0 ? location : orderedStops[index - 1].center;
+        stop.legKm = haversineKm(previous, stop.center);
+        stop.transport = transportForDistance(stop.legKm);
+      });
+      route.push(orderedStops);
+    }
   }
 
   return route;
@@ -527,13 +592,13 @@ function orderClustersByNearest(clusters, location, days, stopsPerDay) {
 
 function buildRoute(points, location, days, stopsPerDay, mode = "normal") {
   let clusters = clusterPoints(points);
-  if (mode === "dense") {
+  if (mode === "dense" || mode === "loop") {
     const limit = Math.max(1, days * stopsPerDay);
     clusters = clusters
       .sort((a, b) => b.pointCount - a.pointCount || haversineKm(location, a.center) - haversineKm(location, b.center))
       .slice(0, limit);
   }
-  return orderClustersByNearest(clusters, location, days, stopsPerDay);
+  return orderClustersByNearest(clusters, location, days, stopsPerDay, { loop: mode === "loop" });
 }
 
 function clearMap() {
@@ -594,7 +659,10 @@ function renderMap(points, routeDays = []) {
     state.markers.push(marker);
   });
 
-  const line = routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]);
+  const start = getLocation();
+  const line = getRouteMode() === "loop"
+    ? [[start.lat, start.lng], ...routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]), [start.lat, start.lng]]
+    : routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]);
   if (line.length > 1) {
     state.routeLine = L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.8 }).addTo(map);
   }
@@ -720,7 +788,7 @@ function createClusterCard(cluster, index) {
   card.innerHTML = `
     <div class="cluster-heading">
       <div>
-        <div class="point-topline">${index + 1}. ${cluster.transport.mode} · 上一段约 ${cluster.legKm.toFixed(1)} km · ${cluster.transport.time}</div>
+        <div class="point-topline">${index + 1}. ${cluster.transport.mode} · 上一段约 ${cluster.legKm.toFixed(1)} km · ${cluster.transport.time} · 建议停留 ${cluster.stayMinutes || 40} 分钟</div>
         <h3>${escapeHtml(cluster.displayName)}</h3>
         <p class="meta">${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)} · 区域内约 ${totalInnerKm.toFixed(1)} km</p>
       </div>
@@ -792,6 +860,9 @@ function updateShareUrl(push = false) {
   params.set("days", $("daysInput").value);
   params.set("stops", $("stopsInput").value);
   params.set("mode", getRouteMode());
+  params.set("intensity", $("intensitySelect").value);
+  params.set("start", $("dayStartInput").value);
+  params.set("end", $("dayEndInput").value);
   const url = `${window.location.pathname}?${params.toString()}`;
   window.history[push ? "pushState" : "replaceState"](null, "", url);
 }
@@ -820,6 +891,9 @@ function applyUrlParams() {
   if (params.has("days")) $("daysInput").value = params.get("days");
   if (params.has("stops")) $("stopsInput").value = params.get("stops");
   if (params.has("mode")) $("routeModeSelect").value = params.get("mode");
+  if (params.has("intensity")) $("intensitySelect").value = params.get("intensity");
+  if (params.has("start")) $("dayStartInput").value = params.get("start");
+  if (params.has("end")) $("dayEndInput").value = params.get("end");
   syncUserMarker("分享链接");
 }
 
@@ -840,46 +914,51 @@ function pointDescription(point) {
 }
 
 function buildKml() {
-  if (state.routeClusters.length === 0) {
+  if (state.routeDays.length === 0) {
     throw new Error("请先生成路线，再导出 KML。");
   }
-  const lineCoordinates = state.routeClusters
-    .map((cluster) => `${cluster.center.lng},${cluster.center.lat},0`)
-    .join(" ");
-  const clusterPlacemarks = state.routeClusters.map((cluster, index) => `
+  const dayFolders = state.routeDays.map((dayClusters, dayIndex) => {
+    const start = getLocation();
+    const coordinates = dayClusters.map((cluster) => `${cluster.center.lng},${cluster.center.lat},0`);
+    if (getRouteMode() === "loop") {
+      coordinates.unshift(`${start.lng},${start.lat},0`);
+      coordinates.push(`${start.lng},${start.lat},0`);
+    }
+    const lineCoordinates = coordinates.join(" ");
+    const clusterPlacemarks = dayClusters.map((cluster, index) => `
     <Placemark>
       <name>${index + 1}. ${kmlEscape(cluster.displayName)}</name>
       <description>${kmlEscape(`${cluster.pointCount} 个巡礼点\n${cluster.workSummary}`)}</description>
       <Point><coordinates>${cluster.center.lng},${cluster.center.lat},0</coordinates></Point>
     </Placemark>
   `).join("");
-  const pointPlacemarks = state.routeClusters.flatMap((cluster) => cluster.points.map((point) => `
+    const pointPlacemarks = dayClusters.flatMap((cluster) => cluster.points.map((point) => `
     <Placemark>
       <name>${kmlEscape(point.displayName)}</name>
       <description>${kmlEscape(pointDescription(point))}</description>
       <Point><coordinates>${point.geo[1]},${point.geo[0]},0</coordinates></Point>
     </Placemark>
   `)).join("");
+    return `
+    <Folder>
+      <name>第 ${dayIndex + 1} 天</name>
+      <Folder><name>大巡礼点</name>${clusterPlacemarks}</Folder>
+      <Folder><name>小巡礼点</name>${pointPlacemarks}</Folder>
+      <Placemark>
+        <name>第 ${dayIndex + 1} 天访问顺序</name>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>${lineCoordinates}</coordinates>
+        </LineString>
+      </Placemark>
+    </Folder>`;
+  }).join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Anitabi 巡礼路线</name>
-    <Folder>
-      <name>大巡礼点</name>
-      ${clusterPlacemarks}
-    </Folder>
-    <Folder>
-      <name>小巡礼点</name>
-      ${pointPlacemarks}
-    </Folder>
-    <Placemark>
-      <name>推荐访问顺序</name>
-      <LineString>
-        <tessellate>1</tessellate>
-        <coordinates>${lineCoordinates}</coordinates>
-      </LineString>
-    </Placemark>
+    ${dayFolders}
   </Document>
 </kml>`;
 }
@@ -920,6 +999,7 @@ async function planTrip(nearbyOnly = false) {
     const routeDays = nearbyOnly ? [] : buildRoute(nearby, location, days, stops, getRouteMode());
     state.expandedClusters.clear();
     state.routeClusters = routeDays.flat();
+    state.routeDays = routeDays;
 
     renderMap(nearby.length ? nearby : points, routeDays);
     renderRoute(routeDays);
@@ -929,7 +1009,9 @@ async function planTrip(nearbyOnly = false) {
     if (nearby.length === 0) {
       setStatus(`已读取 ${points.length} 个地标，但半径内没有匹配项。`);
     } else {
-      const modeText = !nearbyOnly && getRouteMode() === "dense" ? "，已优先选择高密度区域" : "";
+      const modeText = !nearbyOnly && getRouteMode() === "dense"
+        ? "，已优先选择高密度区域"
+        : (!nearbyOnly && getRouteMode() === "loop" ? "，已尽量生成环路" : "");
       setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : `${modeText}，路线已生成。`}`);
     }
   } catch (error) {
@@ -975,6 +1057,9 @@ $("radiusSelect").addEventListener("change", () => {
 $("daysInput").addEventListener("change", () => updateShareUrl(false));
 $("stopsInput").addEventListener("change", () => updateShareUrl(false));
 $("routeModeSelect").addEventListener("change", () => updateShareUrl(false));
+$("intensitySelect").addEventListener("change", () => updateShareUrl(false));
+$("dayStartInput").addEventListener("change", () => updateShareUrl(false));
+$("dayEndInput").addEventListener("change", () => updateShareUrl(false));
 $("latInput").addEventListener("change", () => {
   try {
     syncUserMarker("手动输入");
