@@ -279,6 +279,23 @@ legend {
   color: var(--accent-strong);
 }
 
+.cluster-popup .cluster-delete {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e19a8f;
+  border-radius: 7px;
+  background: #fff1ef;
+  color: #a33424;
+  text-align: center;
+}
+
+.cluster-popup .cluster-delete:hover {
+  background: #ffe4df;
+  color: #8f2a1c;
+}
+
 .cluster-popup button span {
   display: grid;
   gap: 2px;
@@ -414,13 +431,20 @@ legend {
   transform: translateY(-1px);
 }
 
+.subject-result.unavailable,
 .subject-chip.unavailable {
   border-color: #e19a8f;
   background: #fff1ef;
 }
 
+.subject-result.unavailable .subject-title strong,
 .subject-chip.unavailable .subject-title strong {
   color: #a33424;
+}
+
+.subject-result.available {
+  border-color: #9acdbd;
+  background: #f2faf6;
 }
 
 .location-result {
@@ -654,6 +678,24 @@ legend {
   text-decoration: none;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.cluster-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.cluster-actions .micro-button {
+  color: #a33424;
+  border-color: #e19a8f;
+  background: #fff1ef;
+}
+
+.cluster-actions .micro-button:hover {
+  background: #ffe4df;
 }
 
 .cluster-points {

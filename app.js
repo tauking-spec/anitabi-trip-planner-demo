@@ -41,6 +41,7 @@ const I18N = {
     bangumiPlaceholder: "输入作品名，如 吹响吧 上低音号",
     searchResults: "搜索结果",
     selectAll: "一键全选",
+    selectCovered: "全选已收录",
     selectedSubjects: "已选作品",
     removeMissing: "移除未收录",
     clearAll: "一键移除",
@@ -79,9 +80,14 @@ const I18N = {
     noSelectedSubjects: "尚未选择作品。可以搜索 Bangumi 条目或手动输入 ID。",
     searchPrompt: "搜索作品后会显示候选条目。",
     allSearchSelected: "搜索结果都已加入作品集合。",
+    deleteCluster: "删除此大巡礼点",
+    clusterDeleted: "已删除大巡礼点并重新连接路线。",
     manualInput: "手动输入",
     noNewSearchResults: "当前搜索结果没有可新增作品。",
+    noCoveredSearchResults: "当前没有已确认收录且可新增的搜索结果。",
+    stillCheckingCoverage: "仍有作品正在检查 Anitabi 收录状态，请稍后再试。",
     addedSearchResults: "已加入 {count} 个搜索结果。",
+    addedCoveredResults: "已加入 {count} 个已收录作品。",
     noSelectedStatus: "当前没有已选作品。",
     clearedSubjects: "已清空已选作品。",
     noMissingSubjects: "当前没有已确认未收录的作品。",
@@ -91,6 +97,7 @@ const I18N = {
     notCollected: "未收录",
     checkingAnitabi: "正在检查 Anitabi",
     anitabiSpots: "Anitabi {count} 个巡礼点",
+    hasPilgrimagePoints: "已收录巡礼点",
   },
   en: {
     panelLabel: "Route planning controls",
@@ -110,6 +117,7 @@ const I18N = {
     bangumiPlaceholder: "Enter an anime title, e.g. Sound! Euphonium",
     searchResults: "Search Results",
     selectAll: "Select All",
+    selectCovered: "Select Covered",
     selectedSubjects: "Selected Anime",
     removeMissing: "Remove Missing",
     clearAll: "Clear All",
@@ -148,9 +156,14 @@ const I18N = {
     noSelectedSubjects: "No anime selected. Search Bangumi or enter IDs manually.",
     searchPrompt: "Search results will appear here.",
     allSearchSelected: "All search results have been selected.",
+    deleteCluster: "Delete this area",
+    clusterDeleted: "Deleted the area and reconnected the route.",
     manualInput: "Manual input",
     noNewSearchResults: "No new anime can be added from the current search results.",
+    noCoveredSearchResults: "No confirmed covered search result can be added.",
+    stillCheckingCoverage: "Some anime are still being checked by Anitabi. Try again shortly.",
     addedSearchResults: "Added {count} search results.",
+    addedCoveredResults: "Added {count} covered anime.",
     noSelectedStatus: "No anime selected.",
     clearedSubjects: "Cleared selected anime.",
     noMissingSubjects: "No confirmed missing anime to remove.",
@@ -160,6 +173,7 @@ const I18N = {
     notCollected: "Not collected",
     checkingAnitabi: "Checking Anitabi",
     anitabiSpots: "Anitabi {count} spots",
+    hasPilgrimagePoints: "Pilgrimage spots found",
   },
 };
 
@@ -358,17 +372,21 @@ function syncStateFromSubjectInput() {
 function addSelectedSubject(subject) {
   const id = String(subject.id);
   if (state.selectedSubjects.some((item) => String(item.id) === id)) return;
-  state.selectedSubjects.push({
-    id,
-    title: subjectTitle(subject),
-    name: subject.name || "",
-    image: subjectCover(subject),
-    meta: subjectMeta(subject),
-  });
+  state.selectedSubjects.push(subjectToSelection(subject));
   syncSubjectInputFromState();
   renderSelectedSubjects();
   checkAnitabiCoverage(state.selectedSubjects[state.selectedSubjects.length - 1]);
   renderBangumiSearchResults(state.searchResults);
+}
+
+function subjectToSelection(subject) {
+  return {
+    id: String(subject.id),
+    title: subjectTitle(subject),
+    name: subject.name || "",
+    image: subjectCover(subject),
+    meta: subjectMeta(subject),
+  };
 }
 
 function selectAllSearchResults() {
@@ -378,20 +396,32 @@ function selectAllSearchResults() {
     setStatus(t("noNewSearchResults"));
     return;
   }
-  subjectsToAdd.forEach((subject) => {
-    state.selectedSubjects.push({
-      id: String(subject.id),
-      title: subjectTitle(subject),
-      name: subject.name || "",
-      image: subjectCover(subject),
-      meta: subjectMeta(subject),
-    });
-  });
+  subjectsToAdd.forEach((subject) => state.selectedSubjects.push(subjectToSelection(subject)));
   syncSubjectInputFromState();
   renderSelectedSubjects();
   subjectsToAdd.forEach((subject) => checkAnitabiCoverage(subject));
   renderBangumiSearchResults(state.searchResults);
   setStatus(t("addedSearchResults", { count: subjectsToAdd.length }));
+}
+
+function selectCoveredSearchResults() {
+  const selectedIds = new Set(state.selectedSubjects.map((subject) => String(subject.id)));
+  const pending = state.searchResults.some((subject) => !state.anitabiCoverage.has(String(subject.id)));
+  const subjectsToAdd = state.searchResults.filter((subject) => {
+    const id = String(subject.id);
+    return !selectedIds.has(id) && state.anitabiCoverage.get(id)?.status === "available";
+  });
+
+  if (subjectsToAdd.length === 0) {
+    setStatus(pending ? t("stillCheckingCoverage") : t("noCoveredSearchResults"));
+    return;
+  }
+
+  subjectsToAdd.forEach((subject) => state.selectedSubjects.push(subjectToSelection(subject)));
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
+  setStatus(t("addedCoveredResults", { count: subjectsToAdd.length }));
 }
 
 function clearSelectedSubjects() {
@@ -474,12 +504,16 @@ function renderBangumiSearchResults(subjects) {
 
   availableSubjects.forEach((subject) => {
     const item = document.createElement("div");
-    item.className = "subject-result";
+    const coverage = state.anitabiCoverage.get(String(subject.id));
+    item.className = `subject-result${coverage?.status === "missing" ? " unavailable" : ""}${coverage?.status === "available" ? " available" : ""}`;
+    const coverageText = coverage
+      ? ` · ${coverage.status === "available" ? t("hasPilgrimagePoints") + ` ${coverage.count}` : t("notCollected")}`
+      : ` · ${t("checkingAnitabi")}`;
     item.innerHTML = `
       <img alt="" src="${subjectCover(subject)}" loading="lazy" />
       <div class="subject-title">
         <strong>${escapeHtml(subjectTitle(subject))}</strong>
-        <span>${escapeHtml(subjectMeta(subject))}</span>
+        <span>${escapeHtml(subjectMeta(subject) + coverageText)}</span>
       </div>
       <button class="mini-button" type="button" data-add-subject="${subject.id}">${t("add")}</button>
     `;
@@ -490,7 +524,7 @@ function renderBangumiSearchResults(subjects) {
 
 async function checkAnitabiCoverage(subject) {
   const id = String(subject.id);
-  if (state.anitabiCoverage.has(id)) return;
+  if (state.anitabiCoverage.has(id)) return state.anitabiCoverage.get(id);
   try {
     const response = await fetch(`${API_BASE}/bangumi/${id}/points/detail?haveImage=false`);
     if (!response.ok) throw new Error("not available");
@@ -504,6 +538,8 @@ async function checkAnitabiCoverage(subject) {
     state.anitabiCoverage.set(id, { status: "missing", count: 0 });
   }
   renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
+  return state.anitabiCoverage.get(id);
 }
 
 async function searchBangumiSubjects() {
@@ -535,6 +571,7 @@ async function searchBangumiSubjects() {
     const subjects = Array.isArray(payload.data) ? payload.data : [];
     state.searchResults = subjects;
     renderBangumiSearchResults(subjects);
+    subjects.forEach((subject) => checkAnitabiCoverage(subject));
     setStatus(`Bangumi 返回 ${subjects.length} 个动画条目。`);
   } catch (error) {
     console.warn(error);
@@ -755,6 +792,17 @@ function transportForDistance(distanceKm) {
   return { mode: "铁路/自驾", time: `${Math.round((distanceKm / 55) * 60 + 20)} 分钟` };
 }
 
+function recomputeRouteLegs(routeDays) {
+  const origin = getLocation();
+  routeDays.forEach((dayClusters) => {
+    dayClusters.forEach((cluster, index) => {
+      const previous = index === 0 ? origin : dayClusters[index - 1].center;
+      cluster.legKm = haversineKm(previous, cluster.center);
+      cluster.transport = transportForDistance(cluster.legKm);
+    });
+  });
+}
+
 function travelMinutes(distanceKm) {
   return Number(transportForDistance(distanceKm).time.replace(/\D/g, "")) || 0;
 }
@@ -907,6 +955,13 @@ function renderMap(points, routeDays = []) {
   if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
 }
 
+function rerenderCurrentRoute() {
+  recomputeRouteLegs(state.routeDays);
+  state.routeClusters = state.routeDays.flat();
+  renderMap(state.points, state.routeDays);
+  renderRoute(state.routeDays);
+}
+
 function clusterPopupHtml(cluster) {
   const pointItems = cluster.points.slice(0, 12).map((point) => (
     `<li><button type="button" data-focus-point="${point.id}">
@@ -919,9 +974,21 @@ function clusterPopupHtml(cluster) {
     <div class="cluster-popup">
       <strong>${escapeHtml(cluster.displayName)}</strong>
       <p>${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)}</p>
+      <button class="cluster-delete" type="button" data-delete-cluster="${cluster.id}">${t("deleteCluster")}</button>
       <ul>${pointItems}${more}</ul>
     </div>
   `;
+}
+
+function deleteCluster(clusterId) {
+  const before = state.routeClusters.length;
+  state.routeDays = state.routeDays
+    .map((dayClusters) => dayClusters.filter((cluster) => cluster.id !== clusterId))
+    .filter((dayClusters) => dayClusters.length > 0);
+  state.expandedClusters.delete(clusterId);
+  if (state.routeDays.flat().length === before) return;
+  rerenderCurrentRoute();
+  setStatus(t("clusterDeleted"));
 }
 
 function focusPoint(point) {
@@ -1025,14 +1092,17 @@ function createClusterCard(cluster, index) {
         <h3>${escapeHtml(cluster.displayName)}</h3>
         <p class="meta">${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)} · 区域内约 ${totalInnerKm.toFixed(1)} km</p>
       </div>
-      <a href="https://www.google.com/maps/search/?api=1&query=${cluster.center.lat},${cluster.center.lng}" target="_blank" rel="noopener noreferrer">打开地点</a>
+      <span class="cluster-actions">
+        <button class="secondary micro-button" type="button" data-delete-cluster="${cluster.id}">${t("deleteCluster")}</button>
+        <a href="https://www.google.com/maps/search/?api=1&query=${cluster.center.lat},${cluster.center.lng}" target="_blank" rel="noopener noreferrer">打开地点</a>
+      </span>
     </div>
     <div class="cluster-points"></div>
   `;
   const list = card.querySelector(".cluster-points");
   renderClusterPoints(cluster, list);
   card.querySelector(".cluster-heading").addEventListener("click", (event) => {
-    if (event.target.closest("a")) return;
+    if (event.target.closest("a, button")) return;
     focusCluster(cluster);
   });
   return card;
@@ -1329,6 +1399,7 @@ $("bangumiSearchBtn").addEventListener("click", () => searchBangumiSubjects());
 $("bangumiSearchInput").addEventListener("keydown", (event) => {
   if (event.key === "Enter") searchBangumiSubjects();
 });
+$("selectCoveredSubjectsBtn").addEventListener("click", () => selectCoveredSearchResults());
 $("selectAllSubjectsBtn").addEventListener("click", () => selectAllSearchResults());
 $("clearSubjectsBtn").addEventListener("click", () => clearSelectedSubjects());
 $("removeMissingSubjectsBtn").addEventListener("click", () => removeMissingSubjects());
@@ -1338,6 +1409,11 @@ $("selectedSubjects").addEventListener("click", (event) => {
   if (button) removeSelectedSubject(button.dataset.removeSubject);
 });
 $("routePanel").addEventListener("click", (event) => {
+  const deleteButton = event.target.closest("[data-delete-cluster]");
+  if (deleteButton) {
+    deleteCluster(deleteButton.dataset.deleteCluster);
+    return;
+  }
   const expandButton = event.target.closest("[data-expand-cluster]");
   if (expandButton) {
     const clusterCard = expandButton.closest("[data-cluster-id]");
@@ -1360,6 +1436,9 @@ $("nearbyPanel").addEventListener("click", (event) => {
 });
 map.on("popupopen", (event) => {
   const popupElement = event.popup.getElement();
+  popupElement?.querySelectorAll("[data-delete-cluster]").forEach((button) => {
+    button.addEventListener("click", () => deleteCluster(button.dataset.deleteCluster));
+  });
   popupElement?.querySelectorAll("[data-focus-point]").forEach((button) => {
     button.addEventListener("click", () => focusPoint(findPointById(button.dataset.focusPoint)));
   });
