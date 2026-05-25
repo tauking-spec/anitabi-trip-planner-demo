@@ -51,7 +51,7 @@
 
           <fieldset class="control-group">
             <legend>作品集合</legend>
-            <div class="search-box">
+            <div class="search-box subject-search">
               <label>
                 Bangumi 动画搜索
                 <input id="bangumiSearchInput" type="search" placeholder="输入作品名，如 吹响吧 上低音号" />
@@ -59,14 +59,14 @@
               <button id="bangumiSearchBtn" type="button" class="secondary">搜索</button>
             </div>
             <div class="subject-picker">
-              <div>
+              <div class="subject-column">
                 <div class="section-header">
                   <span class="section-label">搜索结果</span>
                   <button id="selectAllSubjectsBtn" class="secondary micro-button" type="button">一键全选</button>
                 </div>
                 <div id="bangumiSearchResults" class="subject-results"></div>
               </div>
-              <div>
+              <div class="subject-column selected-column">
                 <div class="section-header">
                   <span class="section-label">已选作品</span>
                   <span class="button-pair">
