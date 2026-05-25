@@ -122,7 +122,6 @@ function syncUserMarker(label = "当前位置", zoom = 14) {
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   renderRangeCircle(location);
   forceCenterMap([location.lat, location.lng], zoom);
-  userMarker.openPopup();
   return location;
 }
 
@@ -232,6 +231,22 @@ function clearSelectedSubjects() {
   renderSelectedSubjects();
   renderBangumiSearchResults(state.searchResults);
   setStatus("已清空已选作品。");
+}
+
+function removeMissingSubjects() {
+  const before = state.selectedSubjects.length;
+  state.selectedSubjects = state.selectedSubjects.filter((subject) => (
+    state.anitabiCoverage.get(String(subject.id))?.status !== "missing"
+  ));
+  const removed = before - state.selectedSubjects.length;
+  if (removed === 0) {
+    setStatus("当前没有已确认未收录的作品。");
+    return;
+  }
+  syncSubjectInputFromState();
+  renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
+  setStatus(`已移除 ${removed} 个 Anitabi 未收录作品。`);
 }
 
 function removeSelectedSubject(subjectId) {
@@ -1133,6 +1148,7 @@ $("bangumiSearchInput").addEventListener("keydown", (event) => {
 });
 $("selectAllSubjectsBtn").addEventListener("click", () => selectAllSearchResults());
 $("clearSubjectsBtn").addEventListener("click", () => clearSelectedSubjects());
+$("removeMissingSubjectsBtn").addEventListener("click", () => removeMissingSubjects());
 $("subjectInput").addEventListener("change", () => syncStateFromSubjectInput());
 $("selectedSubjects").addEventListener("click", (event) => {
   const button = event.target.closest("[data-remove-subject]");

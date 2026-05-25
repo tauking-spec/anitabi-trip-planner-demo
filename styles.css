@@ -323,6 +323,13 @@ legend {
   font-size: 12px;
 }
 
+.button-pair {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .subject-picker {
   display: grid;
   grid-template-columns: 1fr 1fr;
