@@ -502,8 +502,10 @@ function clearMap() {
 function pointPopupHtml(point) {
   const ep = point.ep ? `第 ${point.ep} 集` : "集数未知";
   const time = point.s ? ` · ${secondsToText(point.s)}` : "";
+  const image = point.image ? `<img src="${point.image}" alt="${escapeHtml(point.displayName)} 截图" loading="lazy" />` : "";
   return `
     <div class="point-popup">
+      ${image}
       <strong>${escapeHtml(point.displayName)}</strong>
       <p>${escapeHtml(point.workTitle)} · ${ep}${time}</p>
       <p>来源：${escapeHtml(point.origin || "Anitabi")}</p>
@@ -554,7 +556,10 @@ function renderMap(points, routeDays = []) {
 
 function clusterPopupHtml(cluster) {
   const pointItems = cluster.points.slice(0, 12).map((point) => (
-    `<li><button type="button" data-focus-point="${point.id}"><strong>${escapeHtml(point.displayName)}</strong><span>${escapeHtml(point.workTitle)}</span></button></li>`
+    `<li><button type="button" data-focus-point="${point.id}">
+      ${point.image ? `<img src="${point.image}" alt="" loading="lazy" />` : ""}
+      <span><strong>${escapeHtml(point.displayName)}</strong><small>${escapeHtml(point.workTitle)}</small></span>
+    </button></li>`
   )).join("");
   const more = cluster.points.length > 12 ? `<li>还有 ${cluster.points.length - 12} 个巡礼点</li>` : "";
   return `
@@ -731,6 +736,9 @@ async function planTrip(nearbyOnly = false) {
   try {
     const location = syncUserMarker();
     const radiusKm = getRadiusKm();
+    if (getSubjectIds().length === 0) {
+      throw new Error("Anitabi 公开 API 目前只支持按 Bangumi 作品 ID 获取地标；不选作品的全站最近圣地路线需要后端维护授权地标索引或等待 Anitabi 提供附近地标 API。");
+    }
     const points = await loadPoints();
     const nearby = rankedNearby(points, location, radiusKm);
     const days = Number($("daysInput").value);
