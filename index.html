@@ -145,7 +145,14 @@
         </aside>
 
         <section class="map-zone" aria-label="地图与结果">
-          <div id="map"></div>
+          <div class="map-wrap">
+            <div id="map"></div>
+            <div class="map-toolbar" aria-label="地图工具栏">
+              <button id="mapLocateBtn" type="button" title="定位当前位置">定位</button>
+              <button id="mapZoomInBtn" type="button" title="放大">+</button>
+              <button id="mapZoomOutBtn" type="button" title="缩小">-</button>
+            </div>
+          </div>
           <div class="results" aria-live="polite">
             <div class="tabs" role="tablist">
               <button id="routeTab" class="tab active" type="button">路线</button>

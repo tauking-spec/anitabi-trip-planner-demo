@@ -21,7 +21,7 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
-const map = L.map("map", { zoomControl: true }).setView([34.8909, 135.8074], 12);
+const map = L.map("map", { zoomControl: false }).setView([34.8909, 135.8074], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -90,13 +90,17 @@ function dailyBudgetMinutes() {
   return Math.max(120, end > start ? end - start : 480);
 }
 
-function forceCenterMap(latLng, zoom = 14) {
+function moveMapTo(latLng, zoom = 14, animate = true) {
   map.stop();
   map.invalidateSize({ pan: false });
-  map.setView(latLng, zoom, { animate: false });
+  if (animate) {
+    map.flyTo(latLng, zoom, { animate: true, duration: 0.75, easeLinearity: 0.35 });
+  } else {
+    map.setView(latLng, zoom, { animate: false });
+  }
   requestAnimationFrame(() => {
     map.invalidateSize({ pan: false });
-    map.panTo(latLng, { animate: false });
+    if (!animate) map.panTo(latLng, { animate: false });
   });
 }
 
@@ -121,7 +125,7 @@ function syncUserMarker(label = "当前位置", zoom = 14) {
   }
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   renderRangeCircle(location);
-  forceCenterMap([location.lat, location.lng], zoom);
+  moveMapTo([location.lat, location.lng], zoom, true);
   return location;
 }
 
@@ -1107,6 +1111,9 @@ $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
 $("exportKmlBtn").addEventListener("click", () => exportKml());
 $("shareBtn").addEventListener("click", () => shareCurrentRoute());
+$("mapZoomInBtn").addEventListener("click", () => map.zoomIn());
+$("mapZoomOutBtn").addEventListener("click", () => map.zoomOut());
+$("mapLocateBtn").addEventListener("click", () => $("locateBtn").click());
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
 $("radiusSelect").addEventListener("change", () => {
