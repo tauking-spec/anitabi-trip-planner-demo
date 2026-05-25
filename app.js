@@ -360,6 +360,8 @@ async function fetchSubjectPoints(subjectId) {
   const detailUrl = `${API_BASE}/bangumi/${subjectId}/points/detail?haveImage=true`;
   const [liteRes, detailRes] = await Promise.all([fetch(liteUrl), fetch(detailUrl)]);
 
+  if (liteRes.status === 404 && detailRes.ok) return [];
+
   if (!liteRes.ok || !detailRes.ok) {
     throw new Error(`Anitabi API 请求失败：${subjectId}`);
   }
@@ -378,11 +380,20 @@ async function loadPoints() {
   if (ids.length === 0) throw new Error("请至少输入一个 Bangumi subject ID");
 
   setStatus(`正在读取 ${ids.length} 个作品的 Anitabi 地标...`);
-  const batches = await Promise.all(ids.map(fetchSubjectPoints));
+  const results = await Promise.allSettled(ids.map(fetchSubjectPoints));
+  const failedIds = results
+    .map((result, index) => (result.status === "rejected" ? ids[index] : null))
+    .filter(Boolean);
+  const batches = results
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
   const points = batches.flat();
-  if (points.length === 0) throw new Error("没有读取到含坐标的地标");
+  if (points.length === 0) {
+    throw new Error("没有读取到含坐标的地标。可能是这些 Bangumi 条目尚未被 Anitabi 收录，或没有巡礼点。");
+  }
   state.points = points;
-  setStatus(`已读取 ${points.length} 个地标，来自 ${ids.length} 个作品。`);
+  const failedText = failedIds.length ? `；${failedIds.length} 个作品请求失败` : "";
+  setStatus(`已读取 ${points.length} 个地标，来自 ${ids.length - failedIds.length} 个作品${failedText}。`);
   return points;
 }
 
