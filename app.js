@@ -6,6 +6,7 @@ const state = {
   points: [],
   markers: [],
   routeLine: null,
+  rangeCircle: null,
   currentView: "route",
   selectedSubjects: [],
 };
@@ -53,6 +54,10 @@ function setStatus(message) {
   $("status").textContent = message;
 }
 
+function getRadiusKm() {
+  return Number($("radiusSelect").value);
+}
+
 function setLocation(lat, lng, label = "当前位置") {
   $("latInput").value = Number(lat).toFixed(6);
   $("lngInput").value = Number(lng).toFixed(6);
@@ -73,8 +78,29 @@ function syncUserMarker(label = "当前位置") {
     throw new Error("请输入有效经纬度");
   }
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
+  renderRangeCircle(location);
   map.setView([location.lat, location.lng], Math.max(map.getZoom(), 12));
   return location;
+}
+
+function renderRangeCircle(location = getLocation()) {
+  if (state.rangeCircle) {
+    state.rangeCircle.remove();
+    state.rangeCircle = null;
+  }
+
+  const radiusKm = getRadiusKm();
+  if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng) || radiusKm >= 99999) return;
+
+  state.rangeCircle = L.circle([location.lat, location.lng], {
+    radius: radiusKm * 1000,
+    color: "#d9482f",
+    weight: 2,
+    opacity: 0.78,
+    fillColor: "#d9482f",
+    fillOpacity: 0.08,
+    interactive: false,
+  }).addTo(map);
 }
 
 function getSubjectIds() {
@@ -491,7 +517,7 @@ function renderInitialPanels() {
 async function planTrip(nearbyOnly = false) {
   try {
     const location = syncUserMarker();
-    const radiusKm = Number($("radiusSelect").value);
+    const radiusKm = getRadiusKm();
     const points = await loadPoints();
     const nearby = rankedNearby(points, location, radiusKm);
     const days = Number($("daysInput").value);
@@ -541,6 +567,26 @@ $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
+$("radiusSelect").addEventListener("change", () => {
+  renderRangeCircle();
+  setStatus(getRadiusKm() >= 99999 ? "搜索范围已设为不限。" : `搜索范围已更新为 ${getRadiusKm()} km。`);
+});
+$("latInput").addEventListener("change", () => {
+  try {
+    syncUserMarker("手动输入");
+    setStatus("已通过经纬度更新出发点。");
+  } catch (error) {
+    setStatus(error.message);
+  }
+});
+$("lngInput").addEventListener("change", () => {
+  try {
+    syncUserMarker("手动输入");
+    setStatus("已通过经纬度更新出发点。");
+  } catch (error) {
+    setStatus(error.message);
+  }
+});
 $("locationSearchBtn").addEventListener("click", () => searchLocations());
 $("locationSearchInput").addEventListener("keydown", (event) => {
   if (event.key === "Enter") searchLocations();
@@ -561,4 +607,5 @@ map.on("click", (event) => {
 
 renderSelectedSubjects();
 renderInitialPanels();
+renderRangeCircle();
 setStatus("请选择作品集合并生成路线。");
