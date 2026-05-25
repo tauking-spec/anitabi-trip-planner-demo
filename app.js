@@ -90,6 +90,16 @@ function dailyBudgetMinutes() {
   return Math.max(120, end > start ? end - start : 480);
 }
 
+function forceCenterMap(latLng, zoom = 14) {
+  map.stop();
+  map.invalidateSize({ pan: false });
+  map.setView(latLng, zoom, { animate: false });
+  requestAnimationFrame(() => {
+    map.invalidateSize({ pan: false });
+    map.panTo(latLng, { animate: false });
+  });
+}
+
 function setLocation(lat, lng, label = "当前位置", zoom = 14) {
   $("latInput").value = Number(lat).toFixed(6);
   $("lngInput").value = Number(lng).toFixed(6);
@@ -111,8 +121,8 @@ function syncUserMarker(label = "当前位置", zoom = 14) {
   }
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   renderRangeCircle(location);
-  map.invalidateSize();
-  map.setView([location.lat, location.lng], Math.max(map.getZoom(), zoom), { animate: true });
+  forceCenterMap([location.lat, location.lng], zoom);
+  userMarker.openPopup();
   return location;
 }
 
@@ -1157,7 +1167,7 @@ map.on("popupopen", (event) => {
 });
 map.on("click", (event) => {
   if (event.originalEvent.target.closest?.(".leaflet-marker-icon, .leaflet-popup")) return;
-  setLocation(event.latlng.lat, event.latlng.lng, "地图选点");
+  setLocation(event.latlng.lat, event.latlng.lng, "地图选点", 15);
   updateShareUrl(false);
   setStatus("已通过地图点击更新出发点。");
 });
