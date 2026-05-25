@@ -13,6 +13,8 @@ const state = {
   currentView: "route",
   selectedSubjects: [],
   searchResults: [],
+  expandedClusters: new Map(),
+  routeClusters: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -633,11 +635,30 @@ function createPointCard(point, index) {
   return card;
 }
 
+function renderClusterPoints(cluster, list) {
+  list.innerHTML = "";
+  const visibleCount = Math.min(
+    state.expandedClusters.get(cluster.id) || 4,
+    cluster.points.length,
+  );
+  cluster.points.slice(0, visibleCount).forEach((point, pointIndex) => {
+    list.appendChild(createPointCard(point, pointIndex));
+  });
+  if (cluster.points.length > visibleCount) {
+    const remaining = cluster.points.length - visibleCount;
+    const more = document.createElement("button");
+    more.className = "cluster-more";
+    more.type = "button";
+    more.dataset.expandCluster = cluster.id;
+    more.textContent = `还有 ${remaining} 个巡礼点在该区域内，点击展开 ${Math.min(10, remaining)} 个。`;
+    list.appendChild(more);
+  }
+}
+
 function createClusterCard(cluster, index) {
   const card = document.createElement("article");
   card.className = "cluster-card";
   card.dataset.clusterId = cluster.id;
-  const representative = cluster.points.slice(0, 4);
   const totalInnerKm = Math.max(0.1, cluster.clusterRadiusKm * 2);
   card.innerHTML = `
     <div class="cluster-heading">
@@ -651,13 +672,7 @@ function createClusterCard(cluster, index) {
     <div class="cluster-points"></div>
   `;
   const list = card.querySelector(".cluster-points");
-  representative.forEach((point, pointIndex) => list.appendChild(createPointCard(point, pointIndex)));
-  if (cluster.points.length > representative.length) {
-    const more = document.createElement("div");
-    more.className = "cluster-more";
-    more.textContent = `还有 ${cluster.points.length - representative.length} 个巡礼点在该区域内。`;
-    list.appendChild(more);
-  }
+  renderClusterPoints(cluster, list);
   card.querySelector(".cluster-heading").addEventListener("click", (event) => {
     if (event.target.closest("a")) return;
     focusCluster(cluster);
@@ -703,6 +718,10 @@ function findPointById(pointId) {
   return state.points.find((point) => point.id === pointId);
 }
 
+function findClusterById(clusterId) {
+  return state.routeClusters.find((cluster) => cluster.id === clusterId);
+}
+
 function renderInitialPanels() {
   $("routePanel").innerHTML = '<div class="empty">请选择作品集合，然后生成路线。</div>';
   $("nearbyPanel").innerHTML = '<div class="empty">请选择作品集合，然后查看附近圣地。</div>';
@@ -717,6 +736,8 @@ async function planTrip(nearbyOnly = false) {
     const days = Number($("daysInput").value);
     const stops = Number($("stopsInput").value);
     const routeDays = nearbyOnly ? [] : buildRoute(nearby, location, days, stops);
+    state.expandedClusters.clear();
+    state.routeClusters = routeDays.flat();
 
     renderMap(nearby.length ? nearby : points, routeDays);
     renderRoute(routeDays);
@@ -795,6 +816,17 @@ $("selectedSubjects").addEventListener("click", (event) => {
   if (button) removeSelectedSubject(button.dataset.removeSubject);
 });
 $("routePanel").addEventListener("click", (event) => {
+  const expandButton = event.target.closest("[data-expand-cluster]");
+  if (expandButton) {
+    const clusterCard = expandButton.closest("[data-cluster-id]");
+    const cluster = findClusterById(expandButton.dataset.expandCluster);
+    const currentCount = state.expandedClusters.get(expandButton.dataset.expandCluster) || 4;
+    state.expandedClusters.set(expandButton.dataset.expandCluster, currentCount + 10);
+    if (cluster && clusterCard) {
+      renderClusterPoints(cluster, clusterCard.querySelector(".cluster-points"));
+    }
+    return;
+  }
   const pointCard = event.target.closest("[data-point-id]");
   if (pointCard && !event.target.closest("a")) {
     focusPoint(findPointById(pointCard.dataset.pointId));

@@ -512,11 +512,21 @@ legend {
 }
 
 .cluster-more {
+  width: 100%;
+  min-height: 40px;
+  background: #fbfcfa;
   color: var(--muted);
   border: 1px dashed var(--line);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 13px;
+  text-align: left;
+  white-space: normal;
+}
+
+.cluster-more:hover {
+  background: var(--surface-soft);
+  color: var(--accent-strong);
 }
 
 .point-card {
