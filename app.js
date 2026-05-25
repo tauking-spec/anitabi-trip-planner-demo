@@ -379,8 +379,71 @@ function rankedNearby(points, location, radiusKm) {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
+function centroid(points) {
+  return {
+    lat: points.reduce((sum, point) => sum + point.geo[0], 0) / points.length,
+    lng: points.reduce((sum, point) => sum + point.geo[1], 0) / points.length,
+  };
+}
+
+function clusterPoints(points, thresholdKm = 0.25) {
+  const clusters = [];
+  points.forEach((point) => {
+    let bestCluster = null;
+    let bestDistance = Infinity;
+    clusters.forEach((cluster) => {
+      const distance = haversineKm(cluster.center, { lat: point.geo[0], lng: point.geo[1] });
+      if (distance < bestDistance) {
+        bestCluster = cluster;
+        bestDistance = distance;
+      }
+    });
+
+    if (bestCluster && bestDistance <= thresholdKm) {
+      bestCluster.points.push(point);
+      bestCluster.center = centroid(bestCluster.points);
+    } else {
+      clusters.push({
+        id: `cluster-${point.id}`,
+        points: [point],
+        center: { lat: point.geo[0], lng: point.geo[1] },
+      });
+    }
+  });
+
+  return clusters.map((cluster) => {
+    const works = [...new Set(cluster.points.map((point) => point.workTitle))];
+    const primary = cluster.points[0];
+    const clusterRadiusKm = Math.max(
+      0,
+      ...cluster.points.map((point) => haversineKm(cluster.center, { lat: point.geo[0], lng: point.geo[1] })),
+    );
+    return {
+      ...cluster,
+      displayName: cluster.points.length === 1 ? primary.displayName : `${primary.displayName} 周边`,
+      workSummary: works.slice(0, 3).join(" / ") + (works.length > 3 ? ` 等 ${works.length} 部作品` : ""),
+      image: primary.image,
+      clusterRadiusKm,
+      pointCount: cluster.points.length,
+    };
+  });
+}
+
+function transportForDistance(distanceKm) {
+  if (distanceKm <= 0.8) {
+    return { mode: "步行", time: `${Math.max(6, Math.round((distanceKm / 4.5) * 60))} 分钟` };
+  }
+  if (distanceKm <= 5) {
+    return { mode: "步行或公交", time: `${Math.round((distanceKm / 16) * 60 + 8)} 分钟` };
+  }
+  if (distanceKm <= 25) {
+    return { mode: "公交/铁路", time: `${Math.round((distanceKm / 28) * 60 + 15)} 分钟` };
+  }
+  return { mode: "铁路/自驾", time: `${Math.round((distanceKm / 55) * 60 + 20)} 分钟` };
+}
+
 function buildRoute(points, location, days, stopsPerDay) {
-  const remaining = [...points];
+  const remaining = clusterPoints(points);
   const route = [];
   let cursor = { lat: location.lat, lng: location.lng };
 
@@ -388,14 +451,15 @@ function buildRoute(points, location, days, stopsPerDay) {
     const stops = [];
     for (let i = 0; i < stopsPerDay && remaining.length > 0; i += 1) {
       remaining.sort((a, b) => {
-        const da = haversineKm(cursor, { lat: a.geo[0], lng: a.geo[1] });
-        const db = haversineKm(cursor, { lat: b.geo[0], lng: b.geo[1] });
+        const da = haversineKm(cursor, a.center);
+        const db = haversineKm(cursor, b.center);
         return da - db;
       });
       const next = remaining.shift();
-      next.legKm = haversineKm(cursor, { lat: next.geo[0], lng: next.geo[1] });
+      next.legKm = haversineKm(cursor, next.center);
+      next.transport = transportForDistance(next.legKm);
       stops.push(next);
-      cursor = { lat: next.geo[0], lng: next.geo[1] };
+      cursor = next.center;
     }
     if (stops.length > 0) route.push(stops);
   }
@@ -414,20 +478,31 @@ function clearMap() {
 
 function renderMap(points, routeDays = []) {
   clearMap();
-  const routeIndexes = new Map(routeDays.flat().map((point, index) => [point.id, index]));
+  const routeIndexes = new Map(routeDays.flat().map((cluster, index) => [cluster.id, index]));
+  const clusteredPointIds = new Set(routeDays.flatMap((cluster) => cluster.points.map((point) => point.id)));
 
   points.forEach((point) => {
-    const routeIndex = routeIndexes.get(point.id);
     const marker = L.marker([point.geo[0], point.geo[1]], {
-      icon: routeIndex === undefined ? pilgrimageIcon : routeIcon(routeIndex),
+      icon: pilgrimageIcon,
     })
       .bindPopup(`<strong>${escapeHtml(point.displayName)}</strong><br>${escapeHtml(point.workTitle)}`)
       .addTo(map);
-    if (routeIndex !== undefined) marker.setZIndexOffset(1000);
+    if (clusteredPointIds.has(point.id)) marker.setOpacity(0.42);
     state.markers.push(marker);
   });
 
-  const line = routeDays.flat().map((point) => [point.geo[0], point.geo[1]]);
+  routeDays.flat().forEach((cluster) => {
+    const routeIndex = routeIndexes.get(cluster.id);
+    const marker = L.marker([cluster.center.lat, cluster.center.lng], {
+      icon: routeIcon(routeIndex),
+    })
+      .bindPopup(`<strong>${escapeHtml(cluster.displayName)}</strong><br>${cluster.pointCount} 个巡礼点`)
+      .addTo(map);
+    marker.setZIndexOffset(1000);
+    state.markers.push(marker);
+  });
+
+  const line = routeDays.flat().map((cluster) => [cluster.center.lat, cluster.center.lng]);
   if (line.length > 1) {
     state.routeLine = L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.8 }).addTo(map);
   }
@@ -450,7 +525,7 @@ function escapeHtml(value) {
 }
 
 function mapsUrl(points) {
-  const params = points.map((point) => `${point.geo[0]},${point.geo[1]}`).join("/");
+  const params = points.map((point) => `${point.center.lat},${point.center.lng}`).join("/");
   return `https://www.google.com/maps/dir/${params}`;
 }
 
@@ -476,6 +551,33 @@ function createPointCard(point, index) {
   return card;
 }
 
+function createClusterCard(cluster, index) {
+  const card = document.createElement("article");
+  card.className = "cluster-card";
+  const representative = cluster.points.slice(0, 4);
+  const totalInnerKm = Math.max(0.1, cluster.clusterRadiusKm * 2);
+  card.innerHTML = `
+    <div class="cluster-heading">
+      <div>
+        <div class="point-topline">${index + 1}. ${cluster.transport.mode} · 上一段约 ${cluster.legKm.toFixed(1)} km · ${cluster.transport.time}</div>
+        <h3>${escapeHtml(cluster.displayName)}</h3>
+        <p class="meta">${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)} · 区域内约 ${totalInnerKm.toFixed(1)} km</p>
+      </div>
+      <a href="https://www.google.com/maps/search/?api=1&query=${cluster.center.lat},${cluster.center.lng}" target="_blank" rel="noopener noreferrer">打开地点</a>
+    </div>
+    <div class="cluster-points"></div>
+  `;
+  const list = card.querySelector(".cluster-points");
+  representative.forEach((point, pointIndex) => list.appendChild(createPointCard(point, pointIndex)));
+  if (cluster.points.length > representative.length) {
+    const more = document.createElement("div");
+    more.className = "cluster-more";
+    more.textContent = `还有 ${cluster.points.length - representative.length} 个巡礼点在该区域内。`;
+    list.appendChild(more);
+  }
+  return card;
+}
+
 function renderRoute(routeDays) {
   const panel = $("routePanel");
   panel.innerHTML = "";
@@ -484,17 +586,18 @@ function renderRoute(routeDays) {
     return;
   }
 
-  routeDays.forEach((dayPoints, dayIndex) => {
+  routeDays.forEach((dayClusters, dayIndex) => {
     const block = document.createElement("section");
     block.className = "day-block";
-    const totalKm = dayPoints.reduce((sum, point) => sum + (point.legKm || 0), 0);
+    const totalKm = dayClusters.reduce((sum, cluster) => sum + (cluster.legKm || 0), 0);
+    const totalPoints = dayClusters.reduce((sum, cluster) => sum + cluster.pointCount, 0);
     block.innerHTML = `
       <div class="day-header">
-        <h2>第 ${dayIndex + 1} 天 · ${dayPoints.length} 个地点 · 约 ${totalKm.toFixed(1)} km</h2>
-        <a href="${mapsUrl(dayPoints)}" target="_blank" rel="noopener noreferrer">打开导航</a>
+        <h2>第 ${dayIndex + 1} 天 · ${dayClusters.length} 个大巡礼点 · ${totalPoints} 个巡礼点 · 段间约 ${totalKm.toFixed(1)} km</h2>
+        <a href="${mapsUrl(dayClusters)}" target="_blank" rel="noopener noreferrer">打开导航</a>
       </div>
     `;
-    dayPoints.forEach((point, index) => block.appendChild(createPointCard(point, index)));
+    dayClusters.forEach((cluster, index) => block.appendChild(createClusterCard(cluster, index)));
     panel.appendChild(block);
   });
 }

@@ -386,6 +386,52 @@ legend {
   font-size: 13px;
 }
 
+.cluster-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px;
+}
+
+.cluster-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.cluster-heading h3 {
+  font-size: 16px;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+.cluster-heading a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.cluster-points {
+  display: grid;
+  gap: 8px;
+}
+
+.cluster-card .point-card {
+  background: #fbfcfa;
+}
+
+.cluster-more {
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
 .point-card {
   display: grid;
   grid-template-columns: 118px 1fr;
