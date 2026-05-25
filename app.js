@@ -739,6 +739,84 @@ function findClusterById(clusterId) {
   return state.routeClusters.find((cluster) => cluster.id === clusterId);
 }
 
+function kmlEscape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&apos;",
+  })[char]);
+}
+
+function pointDescription(point) {
+  const ep = point.ep ? `第 ${point.ep} 集` : "集数未知";
+  const time = point.s ? ` ${secondsToText(point.s)}` : "";
+  return `${point.workTitle}\n${ep}${time}\n来源：${point.origin || "Anitabi"}\n${point.originURL || ""}`;
+}
+
+function buildKml() {
+  if (state.routeClusters.length === 0) {
+    throw new Error("请先生成路线，再导出 KML。");
+  }
+  const lineCoordinates = state.routeClusters
+    .map((cluster) => `${cluster.center.lng},${cluster.center.lat},0`)
+    .join(" ");
+  const clusterPlacemarks = state.routeClusters.map((cluster, index) => `
+    <Placemark>
+      <name>${index + 1}. ${kmlEscape(cluster.displayName)}</name>
+      <description>${kmlEscape(`${cluster.pointCount} 个巡礼点\n${cluster.workSummary}`)}</description>
+      <Point><coordinates>${cluster.center.lng},${cluster.center.lat},0</coordinates></Point>
+    </Placemark>
+  `).join("");
+  const pointPlacemarks = state.routeClusters.flatMap((cluster) => cluster.points.map((point) => `
+    <Placemark>
+      <name>${kmlEscape(point.displayName)}</name>
+      <description>${kmlEscape(pointDescription(point))}</description>
+      <Point><coordinates>${point.geo[1]},${point.geo[0]},0</coordinates></Point>
+    </Placemark>
+  `)).join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Anitabi 巡礼路线</name>
+    <Folder>
+      <name>大巡礼点</name>
+      ${clusterPlacemarks}
+    </Folder>
+    <Folder>
+      <name>小巡礼点</name>
+      ${pointPlacemarks}
+    </Folder>
+    <Placemark>
+      <name>推荐访问顺序</name>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>${lineCoordinates}</coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+}
+
+function exportKml() {
+  try {
+    const blob = new Blob([buildKml()], {
+      type: "application/vnd.google-earth.kml+xml;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `anitabi-route-${new Date().toISOString().slice(0, 10)}.kml`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus("已导出 KML。可在 Google My Maps 中新建地图并导入该文件。");
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
 function renderInitialPanels() {
   $("routePanel").innerHTML = '<div class="empty">请选择作品集合，然后生成路线。</div>';
   $("nearbyPanel").innerHTML = '<div class="empty">请选择作品集合，然后查看附近圣地。</div>';
@@ -800,6 +878,7 @@ $("locateBtn").addEventListener("click", () => {
 
 $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
+$("exportKmlBtn").addEventListener("click", () => exportKml());
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
 $("radiusSelect").addEventListener("change", () => {
