@@ -13,6 +13,7 @@ const state = {
   currentView: "route",
   selectedSubjects: [],
   searchResults: [],
+  anitabiCoverage: new Map(),
   expandedClusters: new Map(),
   routeClusters: [],
 };
@@ -62,6 +63,10 @@ function setStatus(message) {
 
 function getRadiusKm() {
   return Number($("radiusSelect").value);
+}
+
+function getRouteMode() {
+  return $("routeModeSelect").value;
 }
 
 function setLocation(lat, lng, label = "当前位置", zoom = 14) {
@@ -132,6 +137,7 @@ function subjectMeta(subject) {
 
 function syncSubjectInputFromState() {
   $("subjectInput").value = state.selectedSubjects.map((subject) => subject.id).join(", ");
+  updateShareUrl(false);
 }
 
 function syncStateFromSubjectInput() {
@@ -207,19 +213,41 @@ function renderBangumiSearchResults(subjects) {
   }
 
   availableSubjects.forEach((subject) => {
+    const coverage = state.anitabiCoverage.get(String(subject.id));
+    const coverageText = coverage
+      ? ` · Anitabi ${coverage.status === "available" ? `${coverage.count} 个巡礼点` : "未收录"}`
+      : " · 正在检查 Anitabi";
     const item = document.createElement("div");
     item.className = "subject-result";
     item.innerHTML = `
       <img alt="" src="${subjectCover(subject)}" loading="lazy" />
       <div class="subject-title">
         <strong>${escapeHtml(subjectTitle(subject))}</strong>
-        <span>${escapeHtml(subjectMeta(subject))}</span>
+        <span>${escapeHtml(subjectMeta(subject) + coverageText)}</span>
       </div>
       <button class="mini-button" type="button" data-add-subject="${subject.id}">加入</button>
     `;
     item.querySelector("[data-add-subject]").addEventListener("click", () => addSelectedSubject(subject));
     container.appendChild(item);
   });
+}
+
+async function checkAnitabiCoverage(subject) {
+  const id = String(subject.id);
+  if (state.anitabiCoverage.has(id)) return;
+  try {
+    const response = await fetch(`${API_BASE}/bangumi/${id}/points/detail?haveImage=false`);
+    if (!response.ok) throw new Error("not available");
+    const points = await response.json();
+    const count = Array.isArray(points) ? points.filter((point) => Array.isArray(point.geo)).length : 0;
+    state.anitabiCoverage.set(id, {
+      status: count > 0 ? "available" : "missing",
+      count,
+    });
+  } catch {
+    state.anitabiCoverage.set(id, { status: "missing", count: 0 });
+  }
+  renderBangumiSearchResults(state.searchResults);
 }
 
 async function searchBangumiSubjects() {
@@ -251,6 +279,7 @@ async function searchBangumiSubjects() {
     const subjects = Array.isArray(payload.data) ? payload.data : [];
     state.searchResults = subjects;
     renderBangumiSearchResults(subjects);
+    subjects.forEach((subject) => checkAnitabiCoverage(subject));
     setStatus(`Bangumi 返回 ${subjects.length} 个动画条目。`);
   } catch (error) {
     console.warn(error);
@@ -471,8 +500,8 @@ function transportForDistance(distanceKm) {
   return { mode: "铁路/自驾", time: `${Math.round((distanceKm / 55) * 60 + 20)} 分钟` };
 }
 
-function buildRoute(points, location, days, stopsPerDay) {
-  const remaining = clusterPoints(points);
+function orderClustersByNearest(clusters, location, days, stopsPerDay) {
+  const remaining = [...clusters];
   const route = [];
   let cursor = { lat: location.lat, lng: location.lng };
 
@@ -494,6 +523,17 @@ function buildRoute(points, location, days, stopsPerDay) {
   }
 
   return route;
+}
+
+function buildRoute(points, location, days, stopsPerDay, mode = "normal") {
+  let clusters = clusterPoints(points);
+  if (mode === "dense") {
+    const limit = Math.max(1, days * stopsPerDay);
+    clusters = clusters
+      .sort((a, b) => b.pointCount - a.pointCount || haversineKm(location, a.center) - haversineKm(location, b.center))
+      .slice(0, limit);
+  }
+  return orderClustersByNearest(clusters, location, days, stopsPerDay);
 }
 
 function clearMap() {
@@ -739,6 +779,50 @@ function findClusterById(clusterId) {
   return state.routeClusters.find((cluster) => cluster.id === clusterId);
 }
 
+function updateShareUrl(push = false) {
+  const params = new URLSearchParams();
+  const location = getLocation();
+  const ids = getSubjectIds();
+  if (ids.length > 0) params.set("subjects", ids.join(","));
+  if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
+    params.set("lat", location.lat.toFixed(6));
+    params.set("lng", location.lng.toFixed(6));
+  }
+  params.set("radius", String(getRadiusKm()));
+  params.set("days", $("daysInput").value);
+  params.set("stops", $("stopsInput").value);
+  params.set("mode", getRouteMode());
+  const url = `${window.location.pathname}?${params.toString()}`;
+  window.history[push ? "pushState" : "replaceState"](null, "", url);
+}
+
+async function shareCurrentRoute() {
+  updateShareUrl(true);
+  const url = window.location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+    setStatus("分享链接已复制到剪贴板。");
+  } catch {
+    setStatus(`分享链接已更新到地址栏：${url}`);
+  }
+}
+
+function applyUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const subjects = params.get("subjects");
+  if (subjects) {
+    $("subjectInput").value = subjects;
+    syncStateFromSubjectInput();
+  }
+  if (params.has("lat")) $("latInput").value = params.get("lat");
+  if (params.has("lng")) $("lngInput").value = params.get("lng");
+  if (params.has("radius")) $("radiusSelect").value = params.get("radius");
+  if (params.has("days")) $("daysInput").value = params.get("days");
+  if (params.has("stops")) $("stopsInput").value = params.get("stops");
+  if (params.has("mode")) $("routeModeSelect").value = params.get("mode");
+  syncUserMarker("分享链接");
+}
+
 function kmlEscape(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -833,7 +917,7 @@ async function planTrip(nearbyOnly = false) {
     const nearby = rankedNearby(points, location, radiusKm);
     const days = Number($("daysInput").value);
     const stops = Number($("stopsInput").value);
-    const routeDays = nearbyOnly ? [] : buildRoute(nearby, location, days, stops);
+    const routeDays = nearbyOnly ? [] : buildRoute(nearby, location, days, stops, getRouteMode());
     state.expandedClusters.clear();
     state.routeClusters = routeDays.flat();
 
@@ -845,7 +929,8 @@ async function planTrip(nearbyOnly = false) {
     if (nearby.length === 0) {
       setStatus(`已读取 ${points.length} 个地标，但半径内没有匹配项。`);
     } else {
-      setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : "，路线已生成。"}`);
+      const modeText = !nearbyOnly && getRouteMode() === "dense" ? "，已优先选择高密度区域" : "";
+      setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : `${modeText}，路线已生成。`}`);
     }
   } catch (error) {
     setStatus(error.message);
@@ -879,15 +964,21 @@ $("locateBtn").addEventListener("click", () => {
 $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
 $("exportKmlBtn").addEventListener("click", () => exportKml());
+$("shareBtn").addEventListener("click", () => shareCurrentRoute());
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
 $("radiusSelect").addEventListener("change", () => {
   renderRangeCircle();
+  updateShareUrl(false);
   setStatus(getRadiusKm() >= 99999 ? "搜索范围已设为不限。" : `搜索范围已更新为 ${getRadiusKm()} km。`);
 });
+$("daysInput").addEventListener("change", () => updateShareUrl(false));
+$("stopsInput").addEventListener("change", () => updateShareUrl(false));
+$("routeModeSelect").addEventListener("change", () => updateShareUrl(false));
 $("latInput").addEventListener("change", () => {
   try {
     syncUserMarker("手动输入");
+    updateShareUrl(false);
     setStatus("已通过经纬度更新出发点。");
   } catch (error) {
     setStatus(error.message);
@@ -896,6 +987,7 @@ $("latInput").addEventListener("change", () => {
 $("lngInput").addEventListener("change", () => {
   try {
     syncUserMarker("手动输入");
+    updateShareUrl(false);
     setStatus("已通过经纬度更新出发点。");
   } catch (error) {
     setStatus(error.message);
@@ -944,9 +1036,11 @@ map.on("popupopen", (event) => {
 map.on("click", (event) => {
   if (event.originalEvent.target.closest?.(".leaflet-marker-icon, .leaflet-popup")) return;
   setLocation(event.latlng.lat, event.latlng.lng, "地图选点");
+  updateShareUrl(false);
   setStatus("已通过地图点击更新出发点。");
 });
 
+applyUrlParams();
 renderSelectedSubjects();
 renderInitialPanels();
 renderRangeCircle();

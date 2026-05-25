@@ -101,12 +101,20 @@
                 <option value="99999">不限</option>
               </select>
             </label>
+            <label>
+              路线模式
+              <select id="routeModeSelect">
+                <option value="normal" selected>完整路线</option>
+                <option value="dense">只看高密度区域</option>
+              </select>
+            </label>
           </fieldset>
 
           <div class="row actions">
             <button id="planBtn" type="button">生成路线</button>
             <button id="nearbyBtn" type="button" class="secondary">只看附近</button>
             <button id="exportKmlBtn" type="button" class="secondary">导出 KML</button>
+            <button id="shareBtn" type="button" class="secondary">分享链接</button>
           </div>
 
           <div id="status" class="status" role="status">准备就绪</div>
