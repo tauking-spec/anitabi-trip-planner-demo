@@ -25,9 +25,6 @@
 
           <fieldset class="control-group">
             <legend>当前位置</legend>
-            <div class="row">
-              <button id="locateBtn" type="button">使用浏览器定位</button>
-            </div>
             <div class="search-box">
               <label>
                 地点搜索
@@ -148,9 +145,9 @@
           <div class="map-wrap">
             <div id="map"></div>
             <div class="map-toolbar" aria-label="地图工具栏">
-              <button id="mapLocateBtn" type="button" title="定位当前位置">定位</button>
-              <button id="mapZoomInBtn" type="button" title="放大">+</button>
-              <button id="mapZoomOutBtn" type="button" title="缩小">-</button>
+              <button id="mapLocateBtn" type="button" title="定位当前位置" aria-label="定位当前位置">⌖</button>
+              <button id="mapZoomInBtn" type="button" title="放大" aria-label="放大">+</button>
+              <button id="mapZoomOutBtn" type="button" title="缩小" aria-label="缩小">−</button>
             </div>
           </div>
           <div class="results" aria-live="polite">

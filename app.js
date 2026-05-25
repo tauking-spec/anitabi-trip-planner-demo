@@ -1091,7 +1091,7 @@ function setActiveTab(tab) {
   $("nearbyPanel").classList.toggle("hidden", tab !== "nearby");
 }
 
-$("locateBtn").addEventListener("click", () => {
+function locateCurrentPosition() {
   if (!navigator.geolocation) {
     setStatus("当前浏览器不支持定位。");
     return;
@@ -1105,7 +1105,7 @@ $("locateBtn").addEventListener("click", () => {
     (error) => setStatus(`定位失败：${error.message}`),
     { enableHighAccuracy: true, timeout: 10000 },
   );
-});
+}
 
 $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
@@ -1113,7 +1113,7 @@ $("exportKmlBtn").addEventListener("click", () => exportKml());
 $("shareBtn").addEventListener("click", () => shareCurrentRoute());
 $("mapZoomInBtn").addEventListener("click", () => map.zoomIn());
 $("mapZoomOutBtn").addEventListener("click", () => map.zoomOut());
-$("mapLocateBtn").addEventListener("click", () => $("locateBtn").click());
+$("mapLocateBtn").addEventListener("click", () => locateCurrentPosition());
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
 $("radiusSelect").addEventListener("change", () => {
