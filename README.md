@@ -7,6 +7,7 @@
 - 根据用户当前位置和作品集合，规划一日或多日巡礼路线。
 - 根据当前位置展示附近最近的动画圣地。
 - 支持 Bangumi 公开 API 搜索动画条目、加入作品集合，以及手动导入 Bangumi subject ID。
+- 支持浏览器定位、地点搜索、地图点击选点和经纬度手动输入来设置当前位置。
 - 直接在浏览器中完成位置计算，不上传用户位置到自建服务。
 - 保留 Anitabi、截图来源与原链接展示，避免隐藏数据来源。
 
@@ -35,6 +36,11 @@ http://localhost:8080
 
 - `POST https://api.bgm.tv/v0/search/subjects?limit=8&offset=0`
 - 请求体使用 `keyword` 搜索，并通过 `filter.type: [2]` 限定动画条目。
+
+地点搜索在 demo 中使用 OpenStreetMap Nominatim：
+
+- `GET https://nominatim.openstreetmap.org/search`
+- 正式产品应改为自有后端代理或受控地理编码服务，避免浏览器直连公共服务造成限流、识别和使用政策问题。
 
 根据 Anitabi 文档与 App 说明，相关内容遵循 CC BY-NC-SA 4.0：
 

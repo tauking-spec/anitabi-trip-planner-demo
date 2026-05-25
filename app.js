@@ -1,5 +1,6 @@
 const API_BASE = "https://api.anitabi.cn";
 const BANGUMI_API_BASE = "https://api.bgm.tv";
+const NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org";
 
 const PRESETS = {
   kyoto: [
@@ -78,6 +79,13 @@ function setStatus(message) {
   $("status").textContent = message;
 }
 
+function setLocation(lat, lng, label = "当前位置") {
+  $("latInput").value = Number(lat).toFixed(6);
+  $("lngInput").value = Number(lng).toFixed(6);
+  const location = syncUserMarker(label);
+  return location;
+}
+
 function getLocation() {
   return {
     lat: Number($("latInput").value),
@@ -85,12 +93,12 @@ function getLocation() {
   };
 }
 
-function syncUserMarker() {
+function syncUserMarker(label = "当前位置") {
   const location = getLocation();
   if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
     throw new Error("请输入有效经纬度");
   }
-  userMarker.setLatLng([location.lat, location.lng]).bindPopup("当前位置");
+  userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   map.setView([location.lat, location.lng], Math.max(map.getZoom(), 12));
   return location;
 }
@@ -230,6 +238,69 @@ async function searchBangumiSubjects() {
     console.warn(error);
     $("bangumiSearchResults").innerHTML =
       '<div class="empty">Bangumi 搜索暂不可用。可以继续手动输入 Bangumi subject ID。</div>';
+    setStatus(error.message);
+  }
+}
+
+function renderLocationSearchResults(results) {
+  const container = $("locationSearchResults");
+  container.innerHTML = "";
+  if (results.length === 0) {
+    container.innerHTML = '<div class="empty">没有找到地点。</div>';
+    return;
+  }
+
+  results.forEach((place) => {
+    const item = document.createElement("div");
+    item.className = "location-result";
+    const lat = Number(place.lat);
+    const lng = Number(place.lon);
+    const name = place.name || place.display_name?.split(",")[0] || "搜索结果";
+    item.innerHTML = `
+      <div class="location-title">
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml(place.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`)}</span>
+      </div>
+      <button class="mini-button" type="button">选择</button>
+    `;
+    item.querySelector("button").addEventListener("click", () => {
+      setLocation(lat, lng, name);
+      $("locationSearchResults").innerHTML = "";
+      setStatus(`已选择出发点：${name}`);
+    });
+    container.appendChild(item);
+  });
+}
+
+async function searchLocations() {
+  const query = $("locationSearchInput").value.trim();
+  if (!query) {
+    setStatus("请输入地点关键词。");
+    return;
+  }
+
+  setStatus(`正在搜索地点：${query}`);
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      format: "jsonv2",
+      addressdetails: "1",
+      limit: "6",
+      "accept-language": "zh-CN,zh,en,ja",
+    });
+    const response = await fetch(`${NOMINATIM_API_BASE}/search?${params.toString()}`, {
+      headers: {
+        accept: "application/json",
+      },
+    });
+    if (!response.ok) throw new Error(`地点搜索请求失败：${response.status}`);
+    const results = await response.json();
+    renderLocationSearchResults(Array.isArray(results) ? results : []);
+    setStatus(`地点搜索返回 ${Array.isArray(results) ? results.length : 0} 个候选。`);
+  } catch (error) {
+    console.warn(error);
+    $("locationSearchResults").innerHTML =
+      '<div class="empty">地点搜索暂不可用。可以点击地图选点或手动输入经纬度。</div>';
     setStatus(error.message);
   }
 }
@@ -491,9 +562,7 @@ $("presetSelect").addEventListener("change", (event) => {
 });
 
 $("demoLocationBtn").addEventListener("click", () => {
-  $("latInput").value = "34.8909";
-  $("lngInput").value = "135.8074";
-  syncUserMarker();
+  setLocation(34.8909, 135.8074, "宇治示例");
 });
 
 $("locateBtn").addEventListener("click", () => {
@@ -504,9 +573,7 @@ $("locateBtn").addEventListener("click", () => {
   setStatus("正在请求浏览器定位...");
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      $("latInput").value = position.coords.latitude.toFixed(6);
-      $("lngInput").value = position.coords.longitude.toFixed(6);
-      syncUserMarker();
+      setLocation(position.coords.latitude, position.coords.longitude, "浏览器定位");
       setStatus("已更新当前位置。");
     },
     (error) => setStatus(`定位失败：${error.message}`),
@@ -518,6 +585,10 @@ $("planBtn").addEventListener("click", () => planTrip(false));
 $("nearbyBtn").addEventListener("click", () => planTrip(true));
 $("routeTab").addEventListener("click", () => setActiveTab("route"));
 $("nearbyTab").addEventListener("click", () => setActiveTab("nearby"));
+$("locationSearchBtn").addEventListener("click", () => searchLocations());
+$("locationSearchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") searchLocations();
+});
 $("bangumiSearchBtn").addEventListener("click", () => searchBangumiSubjects());
 $("bangumiSearchInput").addEventListener("keydown", (event) => {
   if (event.key === "Enter") searchBangumiSubjects();
@@ -526,6 +597,10 @@ $("subjectInput").addEventListener("change", () => syncStateFromSubjectInput());
 $("selectedSubjects").addEventListener("click", (event) => {
   const button = event.target.closest("[data-remove-subject]");
   if (button) removeSelectedSubject(button.dataset.removeSubject);
+});
+map.on("click", (event) => {
+  setLocation(event.latlng.lat, event.latlng.lng, "地图选点");
+  setStatus("已通过地图点击更新出发点。");
 });
 
 state.selectedSubjects = PRESETS.kyoto.map((subject) => ({

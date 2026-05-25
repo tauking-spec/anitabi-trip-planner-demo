@@ -192,13 +192,15 @@ legend {
 }
 
 .subject-results,
-.selected-subjects {
+.selected-subjects,
+.location-results {
   display: grid;
   gap: 8px;
 }
 
 .subject-result,
-.subject-chip {
+.subject-chip,
+.location-result {
   display: grid;
   grid-template-columns: 44px 1fr auto;
   gap: 10px;
@@ -207,6 +209,10 @@ legend {
   border-radius: 8px;
   background: white;
   padding: 8px;
+}
+
+.location-result {
+  grid-template-columns: 1fr auto;
 }
 
 .subject-result img,
@@ -230,6 +236,25 @@ legend {
 }
 
 .subject-title span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
+.location-title {
+  min-width: 0;
+}
+
+.location-title strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.location-title span {
   display: block;
   color: var(--muted);
   font-size: 12px;
