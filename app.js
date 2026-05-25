@@ -9,6 +9,7 @@ const state = {
   rangeCircle: null,
   currentView: "route",
   selectedSubjects: [],
+  searchResults: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -150,12 +151,14 @@ function addSelectedSubject(subject) {
   });
   syncSubjectInputFromState();
   renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
 }
 
 function removeSelectedSubject(subjectId) {
   state.selectedSubjects = state.selectedSubjects.filter((subject) => String(subject.id) !== String(subjectId));
   syncSubjectInputFromState();
   renderSelectedSubjects();
+  renderBangumiSearchResults(state.searchResults);
 }
 
 function renderSelectedSubjects() {
@@ -184,12 +187,20 @@ function renderSelectedSubjects() {
 function renderBangumiSearchResults(subjects) {
   const container = $("bangumiSearchResults");
   container.innerHTML = "";
+  const selectedIds = new Set(state.selectedSubjects.map((subject) => String(subject.id)));
+  const availableSubjects = subjects.filter((subject) => !selectedIds.has(String(subject.id)));
+
   if (subjects.length === 0) {
-    container.innerHTML = '<div class="empty">没有找到动画条目。</div>';
+    container.innerHTML = '<div class="empty">搜索作品后会显示候选条目。</div>';
     return;
   }
 
-  subjects.forEach((subject) => {
+  if (availableSubjects.length === 0) {
+    container.innerHTML = '<div class="empty">搜索结果都已加入作品集合。</div>';
+    return;
+  }
+
+  availableSubjects.forEach((subject) => {
     const item = document.createElement("div");
     item.className = "subject-result";
     item.innerHTML = `
@@ -232,6 +243,7 @@ async function searchBangumiSubjects() {
     if (!response.ok) throw new Error(`Bangumi API 请求失败：${response.status}`);
     const payload = await response.json();
     const subjects = Array.isArray(payload.data) ? payload.data : [];
+    state.searchResults = subjects;
     renderBangumiSearchResults(subjects);
     setStatus(`Bangumi 返回 ${subjects.length} 个动画条目。`);
   } catch (error) {
@@ -480,24 +492,24 @@ function renderMap(points, routeDays = []) {
   clearMap();
   const routeClusters = routeDays.flat();
   const routeIndexes = new Map(routeClusters.map((cluster, index) => [cluster.id, index]));
-  const clusteredPointIds = new Set(routeClusters.flatMap((cluster) => cluster.points.map((point) => point.id)));
 
-  points.forEach((point) => {
-    const marker = L.marker([point.geo[0], point.geo[1]], {
-      icon: pilgrimageIcon,
-    })
-      .bindPopup(`<strong>${escapeHtml(point.displayName)}</strong><br>${escapeHtml(point.workTitle)}`)
-      .addTo(map);
-    if (clusteredPointIds.has(point.id)) marker.setOpacity(0.42);
-    state.markers.push(marker);
-  });
+  if (routeClusters.length === 0) {
+    points.forEach((point) => {
+      const marker = L.marker([point.geo[0], point.geo[1]], {
+        icon: pilgrimageIcon,
+      })
+        .bindPopup(`<strong>${escapeHtml(point.displayName)}</strong><br>${escapeHtml(point.workTitle)}`)
+        .addTo(map);
+      state.markers.push(marker);
+    });
+  }
 
   routeClusters.forEach((cluster) => {
     const routeIndex = routeIndexes.get(cluster.id);
     const marker = L.marker([cluster.center.lat, cluster.center.lng], {
       icon: routeIcon(routeIndex),
     })
-      .bindPopup(`<strong>${escapeHtml(cluster.displayName)}</strong><br>${cluster.pointCount} 个巡礼点`)
+      .bindPopup(clusterPopupHtml(cluster))
       .addTo(map);
     marker.setZIndexOffset(1000);
     state.markers.push(marker);
@@ -513,6 +525,20 @@ function renderMap(points, routeDays = []) {
     ...points.map((point) => [point.geo[0], point.geo[1]]),
   ]);
   if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
+}
+
+function clusterPopupHtml(cluster) {
+  const pointItems = cluster.points.slice(0, 12).map((point) => (
+    `<li><strong>${escapeHtml(point.displayName)}</strong><br><span>${escapeHtml(point.workTitle)}</span></li>`
+  )).join("");
+  const more = cluster.points.length > 12 ? `<li>还有 ${cluster.points.length - 12} 个巡礼点</li>` : "";
+  return `
+    <div class="cluster-popup">
+      <strong>${escapeHtml(cluster.displayName)}</strong>
+      <p>${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)}</p>
+      <ul>${pointItems}${more}</ul>
+    </div>
+  `;
 }
 
 function escapeHtml(value) {
