@@ -478,8 +478,9 @@ function clearMap() {
 
 function renderMap(points, routeDays = []) {
   clearMap();
-  const routeIndexes = new Map(routeDays.flat().map((cluster, index) => [cluster.id, index]));
-  const clusteredPointIds = new Set(routeDays.flatMap((cluster) => cluster.points.map((point) => point.id)));
+  const routeClusters = routeDays.flat();
+  const routeIndexes = new Map(routeClusters.map((cluster, index) => [cluster.id, index]));
+  const clusteredPointIds = new Set(routeClusters.flatMap((cluster) => cluster.points.map((point) => point.id)));
 
   points.forEach((point) => {
     const marker = L.marker([point.geo[0], point.geo[1]], {
@@ -491,7 +492,7 @@ function renderMap(points, routeDays = []) {
     state.markers.push(marker);
   });
 
-  routeDays.flat().forEach((cluster) => {
+  routeClusters.forEach((cluster) => {
     const routeIndex = routeIndexes.get(cluster.id);
     const marker = L.marker([cluster.center.lat, cluster.center.lng], {
       icon: routeIcon(routeIndex),
@@ -502,7 +503,7 @@ function renderMap(points, routeDays = []) {
     state.markers.push(marker);
   });
 
-  const line = routeDays.flat().map((cluster) => [cluster.center.lat, cluster.center.lng]);
+  const line = routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]);
   if (line.length > 1) {
     state.routeLine = L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.8 }).addTo(map);
   }
