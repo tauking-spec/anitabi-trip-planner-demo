@@ -238,9 +238,39 @@ legend {
   line-height: 1.35;
 }
 
+.cluster-popup button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  white-space: normal;
+}
+
+.cluster-popup button:hover {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
 .cluster-popup span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.point-popup {
+  display: grid;
+  gap: 4px;
+  max-width: 240px;
+}
+
+.point-popup p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .search-box {
@@ -444,6 +474,12 @@ legend {
   border-radius: 8px;
   background: var(--surface);
   padding: 12px;
+}
+
+.cluster-card,
+.point-card,
+.cluster-popup button {
+  cursor: pointer;
 }
 
 .cluster-heading {

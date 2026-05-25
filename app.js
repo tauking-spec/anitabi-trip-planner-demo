@@ -5,6 +5,9 @@ const NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org";
 const state = {
   points: [],
   markers: [],
+  pointMarkers: new Map(),
+  clusterMarkers: new Map(),
+  focusMarker: null,
   routeLine: null,
   rangeCircle: null,
   currentView: "route",
@@ -482,10 +485,28 @@ function buildRoute(points, location, days, stopsPerDay) {
 function clearMap() {
   state.markers.forEach((marker) => marker.remove());
   state.markers = [];
+  state.pointMarkers.clear();
+  state.clusterMarkers.clear();
+  if (state.focusMarker) {
+    state.focusMarker.remove();
+    state.focusMarker = null;
+  }
   if (state.routeLine) {
     state.routeLine.remove();
     state.routeLine = null;
   }
+}
+
+function pointPopupHtml(point) {
+  const ep = point.ep ? `第 ${point.ep} 集` : "集数未知";
+  const time = point.s ? ` · ${secondsToText(point.s)}` : "";
+  return `
+    <div class="point-popup">
+      <strong>${escapeHtml(point.displayName)}</strong>
+      <p>${escapeHtml(point.workTitle)} · ${ep}${time}</p>
+      <p>来源：${escapeHtml(point.origin || "Anitabi")}</p>
+    </div>
+  `;
 }
 
 function renderMap(points, routeDays = []) {
@@ -498,8 +519,9 @@ function renderMap(points, routeDays = []) {
       const marker = L.marker([point.geo[0], point.geo[1]], {
         icon: pilgrimageIcon,
       })
-        .bindPopup(`<strong>${escapeHtml(point.displayName)}</strong><br>${escapeHtml(point.workTitle)}`)
+        .bindPopup(pointPopupHtml(point))
         .addTo(map);
+      state.pointMarkers.set(point.id, marker);
       state.markers.push(marker);
     });
   }
@@ -512,6 +534,7 @@ function renderMap(points, routeDays = []) {
       .bindPopup(clusterPopupHtml(cluster))
       .addTo(map);
     marker.setZIndexOffset(1000);
+    state.clusterMarkers.set(cluster.id, marker);
     state.markers.push(marker);
   });
 
@@ -529,7 +552,7 @@ function renderMap(points, routeDays = []) {
 
 function clusterPopupHtml(cluster) {
   const pointItems = cluster.points.slice(0, 12).map((point) => (
-    `<li><strong>${escapeHtml(point.displayName)}</strong><br><span>${escapeHtml(point.workTitle)}</span></li>`
+    `<li><button type="button" data-focus-point="${point.id}"><strong>${escapeHtml(point.displayName)}</strong><span>${escapeHtml(point.workTitle)}</span></button></li>`
   )).join("");
   const more = cluster.points.length > 12 ? `<li>还有 ${cluster.points.length - 12} 个巡礼点</li>` : "";
   return `
@@ -539,6 +562,35 @@ function clusterPopupHtml(cluster) {
       <ul>${pointItems}${more}</ul>
     </div>
   `;
+}
+
+function focusPoint(point) {
+  if (!point) return;
+  const latLng = [point.geo[0], point.geo[1]];
+  let marker = state.pointMarkers.get(point.id);
+  if (state.focusMarker && marker !== state.focusMarker) {
+    state.focusMarker.remove();
+    state.focusMarker = null;
+  }
+  if (!marker) {
+    marker = L.marker(latLng, { icon: pilgrimageIcon })
+      .bindPopup(pointPopupHtml(point))
+      .addTo(map);
+    marker.setZIndexOffset(1200);
+    state.focusMarker = marker;
+  }
+  map.invalidateSize();
+  map.setView(latLng, Math.max(map.getZoom(), 17), { animate: true });
+  marker.openPopup();
+}
+
+function focusCluster(cluster) {
+  if (!cluster) return;
+  const marker = state.clusterMarkers.get(cluster.id);
+  const latLng = [cluster.center.lat, cluster.center.lng];
+  map.invalidateSize();
+  map.setView(latLng, Math.max(map.getZoom(), 16), { animate: true });
+  if (marker) marker.openPopup();
 }
 
 function escapeHtml(value) {
@@ -560,6 +612,9 @@ function createPointCard(point, index) {
   const template = $("pointCardTemplate");
   const card = template.content.firstElementChild.cloneNode(true);
   const image = card.querySelector(".point-image");
+  card.dataset.pointId = point.id;
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
   image.src = point.image || "";
   image.alt = `${point.displayName} 截图`;
   card.querySelector(".point-topline").textContent =
@@ -581,6 +636,7 @@ function createPointCard(point, index) {
 function createClusterCard(cluster, index) {
   const card = document.createElement("article");
   card.className = "cluster-card";
+  card.dataset.clusterId = cluster.id;
   const representative = cluster.points.slice(0, 4);
   const totalInnerKm = Math.max(0.1, cluster.clusterRadiusKm * 2);
   card.innerHTML = `
@@ -602,6 +658,10 @@ function createClusterCard(cluster, index) {
     more.textContent = `还有 ${cluster.points.length - representative.length} 个巡礼点在该区域内。`;
     list.appendChild(more);
   }
+  card.querySelector(".cluster-heading").addEventListener("click", (event) => {
+    if (event.target.closest("a")) return;
+    focusCluster(cluster);
+  });
   return card;
 }
 
@@ -637,6 +697,10 @@ function renderNearby(points) {
     return;
   }
   points.slice(0, 24).forEach((point, index) => panel.appendChild(createPointCard(point, index)));
+}
+
+function findPointById(pointId) {
+  return state.points.find((point) => point.id === pointId);
 }
 
 function renderInitialPanels() {
@@ -730,7 +794,24 @@ $("selectedSubjects").addEventListener("click", (event) => {
   const button = event.target.closest("[data-remove-subject]");
   if (button) removeSelectedSubject(button.dataset.removeSubject);
 });
+$("routePanel").addEventListener("click", (event) => {
+  const pointCard = event.target.closest("[data-point-id]");
+  if (pointCard && !event.target.closest("a")) {
+    focusPoint(findPointById(pointCard.dataset.pointId));
+  }
+});
+$("nearbyPanel").addEventListener("click", (event) => {
+  const pointCard = event.target.closest("[data-point-id]");
+  if (pointCard && !event.target.closest("a")) focusPoint(findPointById(pointCard.dataset.pointId));
+});
+map.on("popupopen", (event) => {
+  const popupElement = event.popup.getElement();
+  popupElement?.querySelectorAll("[data-focus-point]").forEach((button) => {
+    button.addEventListener("click", () => focusPoint(findPointById(button.dataset.focusPoint)));
+  });
+});
 map.on("click", (event) => {
+  if (event.originalEvent.target.closest?.(".leaflet-marker-icon, .leaflet-popup")) return;
   setLocation(event.latlng.lat, event.latlng.lng, "地图选点");
   setStatus("已通过地图点击更新出发点。");
 });
