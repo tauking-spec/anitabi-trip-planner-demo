@@ -93,6 +93,11 @@ label {
   accent-color: var(--accent);
 }
 
+.graphhopper-details {
+  display: grid;
+  gap: 10px;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 18px;

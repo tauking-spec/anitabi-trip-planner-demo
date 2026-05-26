@@ -3,6 +3,7 @@ const BANGUMI_API_BASE = "https://api.bgm.tv";
 const NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org";
 const GRAPHHOPPER_API_BASE = "https://graphhopper.com/api/1";
 const GRAPHHOPPER_STORAGE_KEY = "anitabi.graphhopper";
+const GRAPHHOPPER_MAX_POINTS = 5;
 
 const state = {
   points: [],
@@ -113,6 +114,8 @@ const I18N = {
     graphhopperRouting: "正在使用 GraphHopper 计算真实道路路线...",
     graphhopperReady: "GraphHopper 真实道路路线已应用。",
     graphhopperFailed: "GraphHopper 路线请求失败，已保留直线估算路线。",
+    graphhopperRateLimited: "GraphHopper 分钟限流已触发，本次已停止请求并保留直线估算路线。",
+    graphhopperTooManyStops: "GraphHopper 免费接口单次路线点数较少；请把每天最多地点调到 4 个以内，或暂时使用直线估算。",
     graphhopperSaved: "GraphHopper 设置已保存在当前浏览器。",
   },
   en: {
@@ -203,6 +206,8 @@ const I18N = {
     graphhopperRouting: "Calculating real road routes with GraphHopper...",
     graphhopperReady: "GraphHopper road routes applied.",
     graphhopperFailed: "GraphHopper routing failed. Kept straight-line estimates.",
+    graphhopperRateLimited: "GraphHopper minute limit was hit. Stopped requests and kept straight-line estimates.",
+    graphhopperTooManyStops: "GraphHopper free routing supports only a small number of points per request. Set max stops per day to 4 or use straight-line estimates.",
     graphhopperSaved: "GraphHopper settings saved in this browser.",
   },
 };
@@ -300,11 +305,17 @@ function loadGraphHopperSettings() {
   } catch {
     $("graphhopperProfileSelect").value = "foot";
   }
+  updateGraphHopperDetailsVisibility();
 }
 
 function saveGraphHopperSettings(showStatus = true) {
   localStorage.setItem(GRAPHHOPPER_STORAGE_KEY, JSON.stringify(graphHopperSettings()));
+  updateGraphHopperDetailsVisibility();
   if (showStatus) setStatus(t("graphhopperSaved"));
+}
+
+function updateGraphHopperDetailsVisibility() {
+  $("graphhopperDetails").classList.toggle("hidden", !$("graphhopperEnabled").checked);
 }
 
 function getIntensitySettings() {
@@ -869,7 +880,15 @@ function graphHopperProfileLabel(profile = graphHopperSettings().profile) {
   }[profile] || profile;
 }
 
-async function fetchGraphHopperLeg(from, to, settings) {
+function graphHopperErrorMessage(payload) {
+  return String(payload?.message || payload?.hints?.map((hint) => hint.message).join(" ") || "");
+}
+
+function isGraphHopperRateLimit(error) {
+  return /limit|credit|rate|quota|violated/i.test(error.message);
+}
+
+async function fetchGraphHopperRoute(locations, settings) {
   const params = new URLSearchParams({
     profile: settings.profile,
     locale: state.language === "en" ? "en" : "zh-CN",
@@ -878,12 +897,11 @@ async function fetchGraphHopperLeg(from, to, settings) {
     calc_points: "true",
     key: settings.key,
   });
-  params.append("point", `${from.lat},${from.lng}`);
-  params.append("point", `${to.lat},${to.lng}`);
+  locations.forEach((location) => params.append("point", `${location.lat},${location.lng}`));
 
   const response = await fetch(`${GRAPHHOPPER_API_BASE}/route?${params.toString()}`);
-  if (!response.ok) throw new Error(`GraphHopper ${response.status}`);
   const payload = await response.json();
+  if (!response.ok) throw new Error(`GraphHopper ${response.status}: ${graphHopperErrorMessage(payload)}`);
   const path = payload.paths?.[0];
   if (!path) throw new Error("GraphHopper route missing");
 
@@ -906,28 +924,34 @@ async function enhanceRouteWithGraphHopper(routeDays) {
   const origin = getLocation();
   try {
     for (const dayClusters of routeDays) {
-      for (let index = 0; index < dayClusters.length; index += 1) {
-        const previous = index === 0 ? origin : dayClusters[index - 1].center;
-        const cluster = dayClusters[index];
-        const leg = await fetchGraphHopperLeg(previous, cluster.center, settings);
-        cluster.legKm = leg.distanceKm;
-        cluster.transport = { mode: graphHopperProfileLabel(settings.profile), time: `${leg.minutes} 分钟` };
-        cluster.legGeometry = leg.geometry;
+      const locations = [
+        origin,
+        ...dayClusters.map((cluster) => cluster.center),
+        ...(getRouteMode() === "loop" && dayClusters.length > 0 ? [origin] : []),
+      ];
+      if (locations.length > GRAPHHOPPER_MAX_POINTS) {
+        return { applied: false, skipped: true, tooManyStops: true };
       }
-
-      if (getRouteMode() === "loop" && dayClusters.length > 0) {
+      const route = await fetchGraphHopperRoute(locations, settings);
+      const routeDistanceKm = route.distanceKm / Math.max(1, locations.length - 1);
+      const routeMinutes = Math.max(1, Math.round(route.minutes / Math.max(1, locations.length - 1)));
+      for (let index = 0; index < dayClusters.length; index += 1) {
+        const cluster = dayClusters[index];
+        cluster.legKm = routeDistanceKm;
+        cluster.transport = { mode: graphHopperProfileLabel(settings.profile), time: `${routeMinutes} 分钟` };
+        cluster.legGeometry = index === 0 ? route.geometry : null;
+      }
+      if (getRouteMode() === "loop") {
         const last = dayClusters[dayClusters.length - 1];
-        const returnLeg = await fetchGraphHopperLeg(last.center, origin, settings);
-        last.returnKm = returnLeg.distanceKm;
-        last.returnTransport = { mode: graphHopperProfileLabel(settings.profile), time: `${returnLeg.minutes} 分钟` };
-        last.returnGeometry = returnLeg.geometry;
+        last.returnKm = routeDistanceKm;
+        last.returnTransport = { mode: graphHopperProfileLabel(settings.profile), time: `${routeMinutes} 分钟` };
       }
     }
     return { applied: true };
   } catch (error) {
     console.warn(error);
     recomputeRouteLegs(routeDays);
-    return { applied: false, error };
+    return { applied: false, error, rateLimited: isGraphHopperRateLimit(error) };
   }
 }
 
@@ -1090,7 +1114,11 @@ function renderMap(points, routeDays = []) {
     [Number($("latInput").value), Number($("lngInput").value)],
     ...points.map((point) => [point.geo[0], point.geo[1]]),
   ]);
-  if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
+  if (routeClusters.length > 0) {
+    moveMapTo([start.lat, start.lng], 13, true);
+  } else if (bounds.isValid()) {
+    map.fitBounds(bounds.pad(0.18));
+  }
 }
 
 async function rerenderCurrentRoute() {
@@ -1128,7 +1156,10 @@ async function deleteCluster(clusterId) {
   state.expandedClusters.delete(clusterId);
   if (state.routeDays.flat().length === before) return;
   const graphHopperResult = await rerenderCurrentRoute();
-  setStatus(graphHopperResult?.error ? `${t("clusterDeleted")} ${t("graphhopperFailed")}` : t("clusterDeleted"));
+  const graphHopperText = graphHopperResult?.rateLimited
+    ? t("graphhopperRateLimited")
+    : (graphHopperResult?.tooManyStops ? t("graphhopperTooManyStops") : (graphHopperResult?.error ? t("graphhopperFailed") : ""));
+  setStatus(graphHopperText ? `${t("clusterDeleted")} ${graphHopperText}` : t("clusterDeleted"));
 }
 
 function focusPoint(point) {
@@ -1463,7 +1494,15 @@ async function planTrip(nearbyOnly = false) {
         : (!nearbyOnly && getRouteMode() === "loop" ? "，已尽量生成环路" : "");
       const graphHopperText = graphHopperResult.applied
         ? ` ${t("graphhopperReady")}`
-        : (graphHopperResult.error ? ` ${t("graphhopperFailed")}` : (graphHopperResult.missingKey ? ` ${t("graphhopperMissingKey")}` : ""));
+        : (
+          graphHopperResult.rateLimited
+            ? ` ${t("graphhopperRateLimited")}`
+            : (
+              graphHopperResult.tooManyStops
+                ? ` ${t("graphhopperTooManyStops")}`
+                : (graphHopperResult.error ? ` ${t("graphhopperFailed")}` : (graphHopperResult.missingKey ? ` ${t("graphhopperMissingKey")}` : ""))
+            )
+        );
       setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : `${modeText}，路线已生成。`}${graphHopperText}`);
     }
   } catch (error) {

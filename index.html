@@ -147,19 +147,21 @@
               <input id="graphhopperEnabled" type="checkbox" />
               <span data-i18n="enableGraphhopper">使用 GraphHopper 真实道路路线</span>
             </label>
-            <label>
-              <span data-i18n="graphhopperKey">GraphHopper API key</span>
-              <input id="graphhopperKeyInput" type="password" autocomplete="off" placeholder="只保存在当前浏览器" data-i18n-attr="placeholder:graphhopperKeyPlaceholder" />
-            </label>
-            <label>
-              <span data-i18n="graphhopperProfile">交通方式</span>
-              <select id="graphhopperProfileSelect">
-                <option value="foot" data-i18n="profileFoot">步行</option>
-                <option value="bike" data-i18n="profileBike">骑行</option>
-                <option value="car" data-i18n="profileCar">驾车</option>
-              </select>
-            </label>
-            <p class="hint" data-i18n="graphhopperHint">API key 只保存在 localStorage，不会写入分享链接或提交到仓库。</p>
+            <div id="graphhopperDetails" class="graphhopper-details hidden">
+              <label>
+                <span data-i18n="graphhopperKey">GraphHopper API key</span>
+                <input id="graphhopperKeyInput" type="password" autocomplete="off" placeholder="只保存在当前浏览器" data-i18n-attr="placeholder:graphhopperKeyPlaceholder" />
+              </label>
+              <label>
+                <span data-i18n="graphhopperProfile">交通方式</span>
+                <select id="graphhopperProfileSelect">
+                  <option value="foot" data-i18n="profileFoot">步行</option>
+                  <option value="bike" data-i18n="profileBike">骑行</option>
+                  <option value="car" data-i18n="profileCar">驾车</option>
+                </select>
+              </label>
+              <p class="hint" data-i18n="graphhopperHint">API key 只保存在 localStorage，不会写入分享链接或提交到仓库。</p>
+            </div>
           </fieldset>
 
           <div class="row actions">
