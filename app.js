@@ -365,6 +365,18 @@ function moveMapTo(latLng, zoom = 14, animate = true) {
   });
 }
 
+function fitMapToBounds(bounds, options = {}) {
+  if (!bounds.isValid()) return;
+  map.stop();
+  map.invalidateSize({ pan: false });
+  map.fitBounds(bounds.pad(0.18), {
+    animate: true,
+    maxZoom: 15,
+    ...options,
+  });
+  requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+}
+
 function setLocation(lat, lng, label = "当前位置", zoom = 14) {
   $("latInput").value = Number(lat).toFixed(6);
   $("lngInput").value = Number(lng).toFixed(6);
@@ -379,14 +391,14 @@ function getLocation() {
   };
 }
 
-function syncUserMarker(label = "当前位置", zoom = 14) {
+function syncUserMarker(label = "当前位置", zoom = 14, recenter = true) {
   const location = getLocation();
   if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
     throw new Error("请输入有效经纬度");
   }
   userMarker.setLatLng([location.lat, location.lng]).bindPopup(escapeHtml(label));
   renderRangeCircle(location);
-  moveMapTo([location.lat, location.lng], zoom, true);
+  if (recenter) moveMapTo([location.lat, location.lng], zoom, true);
   return location;
 }
 
@@ -1153,14 +1165,19 @@ function renderMap(points, routeDays = []) {
     }
   }
 
-  const bounds = L.latLngBounds([
-    [Number($("latInput").value), Number($("lngInput").value)],
-    ...points.map((point) => [point.geo[0], point.geo[1]]),
-  ]);
   if (routeClusters.length > 0) {
-    moveMapTo([start.lat, start.lng], 13, true);
-  } else if (bounds.isValid()) {
-    map.fitBounds(bounds.pad(0.18));
+    const routeBounds = L.latLngBounds([
+      [start.lat, start.lng],
+      ...routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]),
+      ...graphHopperLines.flat(),
+    ]);
+    fitMapToBounds(routeBounds);
+  } else {
+    const pointBounds = L.latLngBounds([
+      [start.lat, start.lng],
+      ...points.map((point) => [point.geo[0], point.geo[1]]),
+    ]);
+    fitMapToBounds(pointBounds);
   }
 }
 
@@ -1221,7 +1238,7 @@ function focusPoint(point) {
     state.focusMarker = marker;
   }
   map.invalidateSize();
-  map.setView(latLng, Math.max(map.getZoom(), 17), { animate: true });
+  map.setView(latLng, Math.min(Math.max(map.getZoom(), 17), 18), { animate: true });
   marker.openPopup();
 }
 
@@ -1230,7 +1247,7 @@ function focusCluster(cluster) {
   const marker = state.clusterMarkers.get(cluster.id);
   const latLng = [cluster.center.lat, cluster.center.lng];
   map.invalidateSize();
-  map.setView(latLng, Math.max(map.getZoom(), 16), { animate: true });
+  map.setView(latLng, Math.min(Math.max(map.getZoom(), 16), 17), { animate: true });
   if (marker) marker.openPopup();
 }
 
@@ -1509,7 +1526,7 @@ function renderInitialPanels() {
 
 async function planTrip(nearbyOnly = false) {
   try {
-    const location = syncUserMarker();
+    const location = syncUserMarker("当前位置", 14, false);
     const radiusKm = getRadiusKm();
     if (getSubjectIds().length === 0) {
       throw new Error("Anitabi 公开 API 目前只支持按 Bangumi 作品 ID 获取地标；不选作品的全站最近圣地路线需要后端维护授权地标索引或等待 Anitabi 提供附近地标 API。");

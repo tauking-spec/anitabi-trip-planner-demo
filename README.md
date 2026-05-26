@@ -38,6 +38,8 @@ http://localhost:8080
 
 ## 数据与合规边界
 
+第三方开源项目、开放数据和公开服务清单见 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)。
+
 本 demo 使用 Anitabi 文档公开的 API：
 
 - `https://api.anitabi.cn/bangumi/{subjectID}/lite`
@@ -61,6 +63,13 @@ http://localhost:8080
 - 地标截图可能来自动画、地图或用户投稿等多种来源，正式产品应保留 `origin` 与 `originURL`。
 
 这个仓库只做非商业技术验证。若未来接入广告、会员、佣金、票务、酒店或商业合作，需要先取得 Anitabi 及相关内容权利方的明确授权。
+
+当前合规状态：
+
+- 地图界面保留 Leaflet 默认 attribution 控件，展示 OpenStreetMap 署名链接。
+- 仓库已注明 Leaflet、Nominatim、GraphHopper、Bangumi、OpenStreetMap、Anitabi 和 unpkg 的用途、来源与许可/政策入口。
+- Leaflet 通过 CDN 引入；若未来改为本地打包或二次分发，应保留 BSD 2-Clause 许可证文本与版权声明。
+- 本仓库当前未声明自身开源许可证；在添加仓库许可证前，默认不应假定本 demo 代码可被自由再分发。
 
 ## 正式产品前提
 
