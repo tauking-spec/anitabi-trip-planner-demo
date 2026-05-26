@@ -1158,26 +1158,10 @@ function renderMap(points, routeDays = []) {
     ...points.map((point) => [point.geo[0], point.geo[1]]),
   ]);
   if (routeClusters.length > 0) {
-    centerMapOnStart();
+    moveMapTo([start.lat, start.lng], 13, true);
   } else if (bounds.isValid()) {
     map.fitBounds(bounds.pad(0.18));
   }
-}
-
-function centerMapOnStart() {
-  const start = getLocation();
-  const latLng = [start.lat, start.lng];
-  const recenter = (animate = true) => {
-    map.stop();
-    map.invalidateSize({ pan: false });
-    map.setView(latLng, 13, { animate: false });
-    if (animate) map.panTo(latLng, { animate: true, duration: 0.45, easeLinearity: 0.35 });
-  };
-  requestAnimationFrame(() => {
-    recenter(true);
-    setTimeout(() => recenter(true), 220);
-    setTimeout(() => recenter(false), 650);
-  });
 }
 
 async function rerenderCurrentRoute() {
@@ -1544,7 +1528,6 @@ async function planTrip(nearbyOnly = false) {
     renderRoute(routeDays);
     renderNearby(nearby);
     setActiveTab(nearbyOnly ? "nearby" : "route");
-    if (!nearbyOnly && routeDays.length > 0) centerMapOnStart();
 
     if (nearby.length === 0) {
       setStatus(`已读取 ${points.length} 个地标，但半径内没有匹配项。`);
