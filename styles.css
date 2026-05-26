@@ -567,8 +567,8 @@ legend {
 }
 
 .map-zone {
+  position: relative;
   display: grid;
-  grid-template-rows: minmax(360px, 1fr) minmax(250px, 34vh);
   min-width: 0;
   min-height: 0;
 }
@@ -583,7 +583,6 @@ legend {
 .map-wrap {
   position: relative;
   min-width: 0;
-  min-height: 0;
   min-height: 360px;
 }
 
@@ -629,11 +628,20 @@ legend {
 }
 
 .results {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 650;
+  max-height: min(360px, 38vh);
   border-top: 1px solid var(--line);
+  border: 1px solid rgba(199, 210, 200, 0.92);
+  border-radius: 10px;
   background: #fbfcfa;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 16px 42px rgba(30, 37, 32, 0.18);
 }
 
 .tabs {
@@ -658,6 +666,7 @@ legend {
 .result-panel {
   padding: 14px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .hidden {
@@ -839,7 +848,18 @@ legend {
   }
 
   .map-zone {
+    display: grid;
     grid-template-rows: 420px minmax(320px, auto);
+  }
+
+  .results {
+    position: static;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .subject-picker {

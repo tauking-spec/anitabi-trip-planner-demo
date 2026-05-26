@@ -1167,12 +1167,16 @@ function renderMap(points, routeDays = []) {
 function centerMapOnStart() {
   const start = getLocation();
   const latLng = [start.lat, start.lng];
+  const recenter = (animate = true) => {
+    map.stop();
+    map.invalidateSize({ pan: false });
+    map.setView(latLng, 13, { animate: false });
+    if (animate) map.flyTo(latLng, 13, { animate: true, duration: 0.55, easeLinearity: 0.35 });
+  };
   requestAnimationFrame(() => {
-    moveMapTo(latLng, 13, true);
-    setTimeout(() => {
-      map.invalidateSize({ pan: false });
-      map.flyTo(latLng, 13, { animate: true, duration: 0.55, easeLinearity: 0.35 });
-    }, 180);
+    recenter(true);
+    setTimeout(() => recenter(true), 220);
+    setTimeout(() => recenter(false), 650);
   });
 }
 
