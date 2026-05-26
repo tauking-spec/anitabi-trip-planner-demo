@@ -79,6 +79,20 @@ label {
   font-size: 13px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.checkbox-row input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--accent);
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 18px;

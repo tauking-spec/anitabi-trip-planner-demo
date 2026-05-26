@@ -1,6 +1,8 @@
 const API_BASE = "https://api.anitabi.cn";
 const BANGUMI_API_BASE = "https://api.bgm.tv";
 const NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org";
+const GRAPHHOPPER_API_BASE = "https://graphhopper.com/api/1";
+const GRAPHHOPPER_STORAGE_KEY = "anitabi.graphhopper";
 
 const state = {
   points: [],
@@ -63,6 +65,15 @@ const I18N = {
     normalRoute: "完整路线",
     denseRoute: "只看高密度区域",
     loopRoute: "环路路线",
+    graphhopperSettings: "GraphHopper 路线增强",
+    enableGraphhopper: "使用 GraphHopper 真实道路路线",
+    graphhopperKey: "GraphHopper API key",
+    graphhopperKeyPlaceholder: "只保存在当前浏览器",
+    graphhopperProfile: "交通方式",
+    profileFoot: "步行",
+    profileBike: "骑行",
+    profileCar: "驾车",
+    graphhopperHint: "API key 只保存在 localStorage，不会写入分享链接或提交到仓库。",
     planRoute: "生成路线",
     nearbyOnly: "只看附近",
     exportKml: "导出 KML",
@@ -98,6 +109,11 @@ const I18N = {
     checkingAnitabi: "正在检查 Anitabi",
     anitabiSpots: "Anitabi {count} 个巡礼点",
     hasPilgrimagePoints: "已收录巡礼点",
+    graphhopperMissingKey: "已启用 GraphHopper，但还没有填写 API key，当前使用直线估算路线。",
+    graphhopperRouting: "正在使用 GraphHopper 计算真实道路路线...",
+    graphhopperReady: "GraphHopper 真实道路路线已应用。",
+    graphhopperFailed: "GraphHopper 路线请求失败，已保留直线估算路线。",
+    graphhopperSaved: "GraphHopper 设置已保存在当前浏览器。",
   },
   en: {
     panelLabel: "Route planning controls",
@@ -139,6 +155,15 @@ const I18N = {
     normalRoute: "Full Route",
     denseRoute: "Dense Areas Only",
     loopRoute: "Loop Route",
+    graphhopperSettings: "GraphHopper Route Enhancement",
+    enableGraphhopper: "Use GraphHopper real road routes",
+    graphhopperKey: "GraphHopper API key",
+    graphhopperKeyPlaceholder: "Stored only in this browser",
+    graphhopperProfile: "Transport Mode",
+    profileFoot: "Walking",
+    profileBike: "Cycling",
+    profileCar: "Driving",
+    graphhopperHint: "The API key is stored only in localStorage. It is not added to share links or committed to the repo.",
     planRoute: "Plan Route",
     nearbyOnly: "Nearby Only",
     exportKml: "Export KML",
@@ -174,6 +199,11 @@ const I18N = {
     checkingAnitabi: "Checking Anitabi",
     anitabiSpots: "Anitabi {count} spots",
     hasPilgrimagePoints: "Pilgrimage spots found",
+    graphhopperMissingKey: "GraphHopper is enabled, but no API key is set. Using straight-line estimates.",
+    graphhopperRouting: "Calculating real road routes with GraphHopper...",
+    graphhopperReady: "GraphHopper road routes applied.",
+    graphhopperFailed: "GraphHopper routing failed. Kept straight-line estimates.",
+    graphhopperSaved: "GraphHopper settings saved in this browser.",
   },
 };
 
@@ -251,6 +281,30 @@ function getRadiusKm() {
 
 function getRouteMode() {
   return $("routeModeSelect").value;
+}
+
+function graphHopperSettings() {
+  return {
+    enabled: $("graphhopperEnabled").checked,
+    key: $("graphhopperKeyInput").value.trim(),
+    profile: $("graphhopperProfileSelect").value,
+  };
+}
+
+function loadGraphHopperSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GRAPHHOPPER_STORAGE_KEY) || "{}");
+    $("graphhopperEnabled").checked = Boolean(saved.enabled);
+    $("graphhopperKeyInput").value = saved.key || "";
+    $("graphhopperProfileSelect").value = saved.profile || "foot";
+  } catch {
+    $("graphhopperProfileSelect").value = "foot";
+  }
+}
+
+function saveGraphHopperSettings(showStatus = true) {
+  localStorage.setItem(GRAPHHOPPER_STORAGE_KEY, JSON.stringify(graphHopperSettings()));
+  if (showStatus) setStatus(t("graphhopperSaved"));
 }
 
 function getIntensitySettings() {
@@ -799,8 +853,82 @@ function recomputeRouteLegs(routeDays) {
       const previous = index === 0 ? origin : dayClusters[index - 1].center;
       cluster.legKm = haversineKm(previous, cluster.center);
       cluster.transport = transportForDistance(cluster.legKm);
+      delete cluster.legGeometry;
+      delete cluster.returnGeometry;
+      delete cluster.returnKm;
+      delete cluster.returnTransport;
     });
   });
+}
+
+function graphHopperProfileLabel(profile = graphHopperSettings().profile) {
+  return {
+    foot: t("profileFoot"),
+    bike: t("profileBike"),
+    car: t("profileCar"),
+  }[profile] || profile;
+}
+
+async function fetchGraphHopperLeg(from, to, settings) {
+  const params = new URLSearchParams({
+    profile: settings.profile,
+    locale: state.language === "en" ? "en" : "zh-CN",
+    points_encoded: "false",
+    instructions: "false",
+    calc_points: "true",
+    key: settings.key,
+  });
+  params.append("point", `${from.lat},${from.lng}`);
+  params.append("point", `${to.lat},${to.lng}`);
+
+  const response = await fetch(`${GRAPHHOPPER_API_BASE}/route?${params.toString()}`);
+  if (!response.ok) throw new Error(`GraphHopper ${response.status}`);
+  const payload = await response.json();
+  const path = payload.paths?.[0];
+  if (!path) throw new Error("GraphHopper route missing");
+
+  return {
+    distanceKm: path.distance / 1000,
+    minutes: Math.max(1, Math.round(path.time / 60000)),
+    geometry: (path.points?.coordinates || []).map(([lng, lat]) => [lat, lng]),
+  };
+}
+
+async function enhanceRouteWithGraphHopper(routeDays) {
+  const settings = graphHopperSettings();
+  if (!settings.enabled || routeDays.length === 0) return { applied: false, skipped: true };
+  if (!settings.key) {
+    setStatus(t("graphhopperMissingKey"));
+    return { applied: false, skipped: true, missingKey: true };
+  }
+
+  setStatus(t("graphhopperRouting"));
+  const origin = getLocation();
+  try {
+    for (const dayClusters of routeDays) {
+      for (let index = 0; index < dayClusters.length; index += 1) {
+        const previous = index === 0 ? origin : dayClusters[index - 1].center;
+        const cluster = dayClusters[index];
+        const leg = await fetchGraphHopperLeg(previous, cluster.center, settings);
+        cluster.legKm = leg.distanceKm;
+        cluster.transport = { mode: graphHopperProfileLabel(settings.profile), time: `${leg.minutes} 分钟` };
+        cluster.legGeometry = leg.geometry;
+      }
+
+      if (getRouteMode() === "loop" && dayClusters.length > 0) {
+        const last = dayClusters[dayClusters.length - 1];
+        const returnLeg = await fetchGraphHopperLeg(last.center, origin, settings);
+        last.returnKm = returnLeg.distanceKm;
+        last.returnTransport = { mode: graphHopperProfileLabel(settings.profile), time: `${returnLeg.minutes} 分钟` };
+        last.returnGeometry = returnLeg.geometry;
+      }
+    }
+    return { applied: true };
+  } catch (error) {
+    console.warn(error);
+    recomputeRouteLegs(routeDays);
+    return { applied: false, error };
+  }
 }
 
 function travelMinutes(distanceKm) {
@@ -941,11 +1069,21 @@ function renderMap(points, routeDays = []) {
   });
 
   const start = getLocation();
-  const line = getRouteMode() === "loop"
-    ? [[start.lat, start.lng], ...routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]), [start.lat, start.lng]]
-    : routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]);
-  if (line.length > 1) {
-    state.routeLine = L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.8 }).addTo(map);
+  const graphHopperLines = routeClusters.flatMap((cluster) => [
+    ...(cluster.legGeometry?.length ? [cluster.legGeometry] : []),
+    ...(cluster.returnGeometry?.length ? [cluster.returnGeometry] : []),
+  ]);
+  if (graphHopperLines.length > 0) {
+    state.routeLine = L.layerGroup(graphHopperLines.map((line) => (
+      L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.82 })
+    ))).addTo(map);
+  } else {
+    const line = getRouteMode() === "loop"
+      ? [[start.lat, start.lng], ...routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]), [start.lat, start.lng]]
+      : routeClusters.map((cluster) => [cluster.center.lat, cluster.center.lng]);
+    if (line.length > 1) {
+      state.routeLine = L.polyline(line, { color: "#147d64", weight: 4, opacity: 0.8 }).addTo(map);
+    }
   }
 
   const bounds = L.latLngBounds([
@@ -955,11 +1093,13 @@ function renderMap(points, routeDays = []) {
   if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
 }
 
-function rerenderCurrentRoute() {
+async function rerenderCurrentRoute() {
   recomputeRouteLegs(state.routeDays);
+  const graphHopperResult = await enhanceRouteWithGraphHopper(state.routeDays);
   state.routeClusters = state.routeDays.flat();
   renderMap(state.points, state.routeDays);
   renderRoute(state.routeDays);
+  return graphHopperResult;
 }
 
 function clusterPopupHtml(cluster) {
@@ -980,15 +1120,15 @@ function clusterPopupHtml(cluster) {
   `;
 }
 
-function deleteCluster(clusterId) {
+async function deleteCluster(clusterId) {
   const before = state.routeClusters.length;
   state.routeDays = state.routeDays
     .map((dayClusters) => dayClusters.filter((cluster) => cluster.id !== clusterId))
     .filter((dayClusters) => dayClusters.length > 0);
   state.expandedClusters.delete(clusterId);
   if (state.routeDays.flat().length === before) return;
-  rerenderCurrentRoute();
-  setStatus(t("clusterDeleted"));
+  const graphHopperResult = await rerenderCurrentRoute();
+  setStatus(graphHopperResult?.error ? `${t("clusterDeleted")} ${t("graphhopperFailed")}` : t("clusterDeleted"));
 }
 
 function focusPoint(point) {
@@ -1085,10 +1225,13 @@ function createClusterCard(cluster, index) {
   card.className = "cluster-card";
   card.dataset.clusterId = cluster.id;
   const totalInnerKm = Math.max(0.1, cluster.clusterRadiusKm * 2);
+  const returnText = cluster.returnKm
+    ? ` · 返程约 ${cluster.returnKm.toFixed(1)} km · ${cluster.returnTransport?.time || ""}`
+    : "";
   card.innerHTML = `
     <div class="cluster-heading">
       <div>
-        <div class="point-topline">${index + 1}. ${cluster.transport.mode} · 上一段约 ${cluster.legKm.toFixed(1)} km · ${cluster.transport.time} · 建议停留 ${cluster.stayMinutes || 40} 分钟</div>
+        <div class="point-topline">${index + 1}. ${cluster.transport.mode} · 上一段约 ${cluster.legKm.toFixed(1)} km · ${cluster.transport.time}${returnText} · 建议停留 ${cluster.stayMinutes || 40} 分钟</div>
         <h3>${escapeHtml(cluster.displayName)}</h3>
         <p class="meta">${cluster.pointCount} 个巡礼点 · ${escapeHtml(cluster.workSummary)} · 区域内约 ${totalInnerKm.toFixed(1)} km</p>
       </div>
@@ -1119,7 +1262,7 @@ function renderRoute(routeDays) {
   routeDays.forEach((dayClusters, dayIndex) => {
     const block = document.createElement("section");
     block.className = "day-block";
-    const totalKm = dayClusters.reduce((sum, cluster) => sum + (cluster.legKm || 0), 0);
+    const totalKm = dayClusters.reduce((sum, cluster) => sum + (cluster.legKm || 0) + (cluster.returnKm || 0), 0);
     const totalPoints = dayClusters.reduce((sum, cluster) => sum + cluster.pointCount, 0);
     block.innerHTML = `
       <div class="day-header">
@@ -1302,6 +1445,7 @@ async function planTrip(nearbyOnly = false) {
     const days = Number($("daysInput").value);
     const stops = Number($("stopsInput").value);
     const routeDays = nearbyOnly ? [] : buildRoute(nearby, location, days, stops, getRouteMode());
+    const graphHopperResult = nearbyOnly ? { applied: false, skipped: true } : await enhanceRouteWithGraphHopper(routeDays);
     state.expandedClusters.clear();
     state.routeClusters = routeDays.flat();
     state.routeDays = routeDays;
@@ -1317,7 +1461,10 @@ async function planTrip(nearbyOnly = false) {
       const modeText = !nearbyOnly && getRouteMode() === "dense"
         ? "，已优先选择高密度区域"
         : (!nearbyOnly && getRouteMode() === "loop" ? "，已尽量生成环路" : "");
-      setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : `${modeText}，路线已生成。`}`);
+      const graphHopperText = graphHopperResult.applied
+        ? ` ${t("graphhopperReady")}`
+        : (graphHopperResult.error ? ` ${t("graphhopperFailed")}` : (graphHopperResult.missingKey ? ` ${t("graphhopperMissingKey")}` : ""));
+      setStatus(`找到 ${nearby.length} 个半径内地标${nearbyOnly ? "。" : `${modeText}，路线已生成。`}${graphHopperText}`);
     }
   } catch (error) {
     setStatus(error.message);
@@ -1368,6 +1515,9 @@ $("routeModeSelect").addEventListener("change", () => updateShareUrl(false));
 $("intensitySelect").addEventListener("change", () => updateShareUrl(false));
 $("dayStartInput").addEventListener("change", () => updateShareUrl(false));
 $("dayEndInput").addEventListener("change", () => updateShareUrl(false));
+$("graphhopperEnabled").addEventListener("change", () => saveGraphHopperSettings());
+$("graphhopperKeyInput").addEventListener("change", () => saveGraphHopperSettings());
+$("graphhopperProfileSelect").addEventListener("change", () => saveGraphHopperSettings());
 $("languageSelect").addEventListener("change", (event) => {
   applyLanguage(event.target.value);
   updateShareUrl(false);
@@ -1450,6 +1600,7 @@ map.on("click", (event) => {
   setStatus("已通过地图点击更新出发点。");
 });
 
+loadGraphHopperSettings();
 applyLanguage(new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh");
 applyUrlParams();
 renderInitialPanels();
