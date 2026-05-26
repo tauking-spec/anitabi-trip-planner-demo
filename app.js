@@ -1171,7 +1171,7 @@ function centerMapOnStart() {
     map.stop();
     map.invalidateSize({ pan: false });
     map.setView(latLng, 13, { animate: false });
-    if (animate) map.flyTo(latLng, 13, { animate: true, duration: 0.55, easeLinearity: 0.35 });
+    if (animate) map.panTo(latLng, { animate: true, duration: 0.45, easeLinearity: 0.35 });
   };
   requestAnimationFrame(() => {
     recenter(true);
